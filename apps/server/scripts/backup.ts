@@ -7,7 +7,14 @@ import { createBackup, pruneBackups } from '../src/backup.ts';
 
 dotenv.config({ path: path.join(repoRoot, '.env'), quiet: true });
 const config = loadConfig();
-const { sqlite, close } = openDatabase(config.dataDir);
+let handle;
+try {
+  handle = openDatabase(config.dataDir, { mustExist: true });
+} catch (err) {
+  console.error(err instanceof Error ? err.message : err);
+  process.exit(1);
+}
+const { sqlite, close } = handle;
 const name = await createBackup(sqlite, config.dataDir, config.backupDir);
 const removed = pruneBackups(config.backupDir, config.backupKeepDays);
 close();

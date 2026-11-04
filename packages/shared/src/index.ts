@@ -8,7 +8,8 @@ export const loginRequest = z.object({
 export type LoginRequest = z.infer<typeof loginRequest>;
 
 export const pushSubscriptionRequest = z.object({
-  endpoint: z.url().max(2048),
+  // Push services are always HTTPS. Rejecting other schemes stops the server from posting to arbitrary hosts.
+  endpoint: z.url({ protocol: /^https$/ }).max(2048),
   keys: z.object({
     p256dh: z.string().min(1).max(512),
     auth: z.string().min(1).max(512),

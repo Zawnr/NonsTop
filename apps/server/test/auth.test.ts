@@ -18,18 +18,21 @@ describe('password hashing', () => {
 });
 
 describe('sessions', () => {
-  it('expires after the configured days and slides on use', () => {
+  it('expires after the configured days, slides on use at most once a day', () => {
+    const H = 3600_000;
     let t = 0;
     const { db } = openDatabase(':memory:');
-    const store = new SessionStore(db, 1, () => t);
+    const store = new SessionStore(db, 3, () => t); // expires at 72h
     const token = store.create();
-    t = 23 * 3600_000;
-    expect(store.validate(token)).toBe(true); // slides expiry to t + 1 day
-    t = 46 * 3600_000;
-    expect(store.validate(token)).toBe(true);
-    t = 71 * 3600_000;
-    expect(store.validate(token)).toBe(false);
-    expect(store.validate(token)).toBe(false);
+    t = 12 * H;
+    expect(store.validate(token)).toEqual({ valid: true, refreshed: false }); // less than a day gained
+    t = 30 * H;
+    expect(store.validate(token)).toEqual({ valid: true, refreshed: true }); // now expires at 102h
+    t = 101 * H;
+    expect(store.validate(token).valid).toBe(true);
+    t = 300 * H;
+    expect(store.validate(token).valid).toBe(false);
+    expect(store.validate(token).valid).toBe(false);
   });
 
   it('stores only a hash of the token', () => {
@@ -69,6 +72,15 @@ describe('auth routes', () => {
     expect((await post(app, '/api/auth/login', { pw: 1 })).status).toBe(400);
   });
 
+  it('counts concurrent failures before letting more through', async () => {
+    const { app } = makeApp({ limiter: new LoginLimiter(3) });
+    const results = await Promise.all(
+      Array.from({ length: 10 }, () => post(app, '/api/auth/login', { password: 'bad' })),
+    );
+    expect(results.filter((r) => r.status === 401)).toHaveLength(3);
+    expect(results.filter((r) => r.status === 429)).toHaveLength(7);
+  });
+
   it('blocks logins after too many failures, even with the right password', async () => {
     const { app } = makeApp({ limiter: new LoginLimiter(3) });
     for (let i = 0; i < 3; i++) await post(app, '/api/auth/login', { password: 'bad' });
@@ -82,6 +94,18 @@ describe('auth routes', () => {
     expect(await (await get(app, '/api/auth/session', cookie)).json()).toEqual({ authenticated: true });
     await post(app, '/api/auth/logout', {}, cookie);
     expect(await (await get(app, '/api/auth/session', cookie)).json()).toEqual({ authenticated: false });
+  });
+
+  it('re-sends the cookie when the session slides forward', async () => {
+    let t = 0;
+    const { app } = makeApp({ now: () => t });
+    const cookie = await login(app);
+    t = 2 * 24 * 3600_000;
+    const res = await get(app, '/api/auth/session', cookie);
+    expect(await res.json()).toEqual({ authenticated: true });
+    expect(res.headers.get('set-cookie')).toContain('Max-Age=2592000');
+    const again = await get(app, '/api/auth/session', cookie);
+    expect(again.headers.get('set-cookie')).toBeNull();
   });
 
   it('protects private routes', async () => {

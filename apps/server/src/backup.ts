@@ -43,10 +43,15 @@ export async function createBackup(
   return name;
 }
 
-/** Keeps the newest `keepDays` backups. Older ones are removed. */
+/**
+ * Keeps every backup from the newest `keepDays` calendar days that have a backup.
+ * Several backups on one day count as one day. The newest backup is never removed.
+ */
 export function pruneBackups(backupDir: string, keepDays: number): string[] {
   const all = listBackups(backupDir);
-  const remove = all.slice(0, Math.max(0, all.length - keepDays));
+  const days = [...new Set(all.map((n) => n.slice(0, 10)))];
+  const keep = new Set(days.slice(-Math.max(1, keepDays)));
+  const remove = all.filter((n) => !keep.has(n.slice(0, 10)));
   for (const n of remove) fs.rmSync(path.join(backupDir, n), { recursive: true, force: true });
   return remove;
 }

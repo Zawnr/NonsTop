@@ -21,6 +21,8 @@ describe('push', () => {
     const { app } = makeApp();
     const cookie = await login(app);
     expect((await post(app, '/api/push/subscribe', { endpoint: 'not-a-url' }, cookie)).status).toBe(400);
+    const plainHttp = { ...sub(1), endpoint: 'http://127.0.0.1:22/' };
+    expect((await post(app, '/api/push/subscribe', plainHttp, cookie)).status).toBe(400);
   });
 
   it('sends a test notification to every device and drops gone subscriptions', async () => {

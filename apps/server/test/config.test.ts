@@ -19,5 +19,8 @@ describe('config', () => {
     expect(() => loadConfig({ ...base, PORT: 'abc' })).toThrow(ConfigError);
     expect(() => loadConfig({ ...base, BACKUP_HOUR: '24' })).toThrow(ConfigError);
     expect(() => loadConfig({ ...base, COOKIE_SECURE: 'yes' })).toThrow(ConfigError);
+    expect(() => loadConfig({ ...base, PORT: '70000' })).toThrow(ConfigError);
+    expect(() => loadConfig({ ...base, SESSION_DAYS: '0' })).toThrow(ConfigError);
+    expect(() => loadConfig({ ...base, BACKUP_KEEP_DAYS: '0' })).toThrow(ConfigError);
   });
 });

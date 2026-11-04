@@ -8,7 +8,7 @@ import { openDatabase } from './db/client.ts';
 import { LoginLimiter, SessionStore } from './auth.ts';
 import { PushService } from './push.ts';
 import { createApp } from './app.ts';
-import { PID_FILE, scheduleDailyBackup } from './backup.ts';
+import { isServerRunning, PID_FILE, scheduleDailyBackup } from './backup.ts';
 
 dotenv.config({ path: path.join(repoRoot, '.env'), quiet: true });
 
@@ -21,6 +21,12 @@ try {
     process.exit(1);
   }
   throw err;
+}
+
+// One server per data dir. A second instance would confuse the restore guard.
+if (isServerRunning(config.dataDir)) {
+  console.error(`[server] Another NonsTop server is already running on ${config.dataDir}. If not, delete ${PID_FILE} there.`);
+  process.exit(1);
 }
 
 const { sqlite, db, close } = openDatabase(config.dataDir);
@@ -36,9 +42,7 @@ const app = createApp({
   serveWeb: production,
 });
 
-// The PID file lets "pnpm restore" refuse to run while the server is up.
 const pidFile = path.join(config.dataDir, PID_FILE);
-fs.writeFileSync(pidFile, String(process.pid));
 
 const stopBackup = scheduleDailyBackup({
   sqlite,
@@ -49,6 +53,8 @@ const stopBackup = scheduleDailyBackup({
 });
 
 const server = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) => {
+  // Written only after the port is bound. The PID file lets "pnpm restore" refuse to run while the server is up.
+  fs.writeFileSync(pidFile, String(process.pid));
   console.log(`NonsTop ${production ? '' : '(dev API) '}running at http://${config.host}:${info.port}`);
 });
 

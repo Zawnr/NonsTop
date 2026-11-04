@@ -44,19 +44,26 @@ export class SessionStore {
     return token;
   }
 
-  /** Valid sessions slide forward, so a device in daily use stays logged in. */
-  validate(token: string | undefined): boolean {
-    if (!token) return false;
+  /**
+   * Valid sessions slide forward, so a device in daily use stays logged in.
+   * The expiry is extended at most once a day, so read-only requests do not write to SQLite.
+   * `refreshed` tells the caller to re-send the cookie with a fresh max-age.
+   */
+  validate(token: string | undefined): { valid: boolean; refreshed: boolean } {
+    const no = { valid: false, refreshed: false };
+    if (!token) return no;
     const id = tokenId(token);
     const row = this.db.select().from(sessions).where(eq(sessions.id, id)).get();
     const t = this.now();
-    if (!row) return false;
+    if (!row) return no;
     if (row.expiresAt <= t) {
       this.db.delete(sessions).where(eq(sessions.id, id)).run();
-      return false;
+      return no;
     }
-    this.db.update(sessions).set({ expiresAt: t + this.sessionDays * DAY_MS }).where(eq(sessions.id, id)).run();
-    return true;
+    const full = t + this.sessionDays * DAY_MS;
+    if (full - row.expiresAt < DAY_MS) return { valid: true, refreshed: false };
+    this.db.update(sessions).set({ expiresAt: full }).where(eq(sessions.id, id)).run();
+    return { valid: true, refreshed: true };
   }
 
   revoke(token: string | undefined): void {

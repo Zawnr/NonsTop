@@ -67,11 +67,20 @@ describe('backup and restore', () => {
     expect(() => restoreBackup('2026-01-01_000000', dataDir, backupDir)).toThrow(RestoreError);
   });
 
-  it('keeps only the newest N backups', async () => {
+  it('keeps the newest N days of backups, counting same-day backups as one day', async () => {
     const h = openDatabase(dataDir);
     for (let d = 1; d <= 5; d++) await createBackup(h.sqlite, dataDir, backupDir, new Date(2026, 10, d, 3));
+    for (let m = 1; m <= 4; m++) await createBackup(h.sqlite, dataDir, backupDir, new Date(2026, 10, 5, 9, m));
     h.close();
     expect(pruneBackups(backupDir, 3)).toEqual(['2026-11-01_030000', '2026-11-02_030000']);
-    expect(listBackups(backupDir)).toHaveLength(3);
+    expect(listBackups(backupDir)).toHaveLength(7);
+    // Even keepDays 0 never removes the newest day.
+    pruneBackups(backupDir, 0);
+    expect(listBackups(backupDir).every((n) => n.startsWith('2026-11-05'))).toBe(true);
+  });
+
+  it('refuses to back up a database that does not exist', () => {
+    expect(() => openDatabase(path.join(root, 'typo'), { mustExist: true })).toThrow(/not found/);
+    expect(fs.existsSync(path.join(root, 'typo'))).toBe(false);
   });
 });

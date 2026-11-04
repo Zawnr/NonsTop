@@ -20,6 +20,12 @@ export function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
   return out;
 }
 
+export function sameKey(a: ArrayBuffer | null, b: Uint8Array): boolean {
+  if (!a || a.byteLength !== b.byteLength) return false;
+  const av = new Uint8Array(a);
+  return av.every((v, i) => v === b[i]);
+}
+
 export function deviceLabel(ua: string = navigator.userAgent): string {
   if (/Android/i.test(ua)) return 'Android';
   if (/iPhone|iPad/i.test(ua)) return 'iOS';
@@ -34,9 +40,14 @@ export async function enablePush(): Promise<void> {
   if (permission !== 'granted') throw new Error('Izin notifikasi ditolak.');
   const reg = await navigator.serviceWorker.ready;
   const { publicKey } = await api.pushPublicKey();
-  const sub =
-    (await reg.pushManager.getSubscription()) ??
-    (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) }));
+  const serverKey = urlBase64ToUint8Array(publicKey);
+  let sub = await reg.pushManager.getSubscription();
+  // A subscription made with an old VAPID key (after .env was regenerated) can never receive pushes.
+  if (sub && !sameKey(sub.options.applicationServerKey, serverKey)) {
+    await sub.unsubscribe();
+    sub = null;
+  }
+  sub ??= await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: serverKey });
   const json = sub.toJSON();
   if (!json.endpoint || !json.keys?.p256dh || !json.keys.auth) throw new Error('Subscription tidak lengkap.');
   await api.pushSubscribe({

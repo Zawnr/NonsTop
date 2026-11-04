@@ -23,10 +23,10 @@ export interface Config {
 
 export class ConfigError extends Error {}
 
-function int(value: string | undefined, fallback: number, name: string): number {
+function int(value: string | undefined, fallback: number, name: string, min: number, max: number): number {
   if (value === undefined || value === '') return fallback;
   const n = Number(value);
-  if (!Number.isInteger(n) || n < 0) throw new ConfigError(`${name} must be a non-negative integer`);
+  if (!Number.isInteger(n) || n < min || n > max) throw new ConfigError(`${name} must be an integer from ${min} to ${max}`);
   return n;
 }
 
@@ -47,12 +47,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     throw new ConfigError('COOKIE_SECURE must be auto, always or never');
   }
 
-  const backupHour = int(env.BACKUP_HOUR, 3, 'BACKUP_HOUR');
-  if (backupHour > 23) throw new ConfigError('BACKUP_HOUR must be 0-23');
 
   return {
     host: env.HOST || '127.0.0.1',
-    port: int(env.PORT, 8787, 'PORT'),
+    port: int(env.PORT, 8787, 'PORT', 1, 65535),
     dataDir: resolvePath(env.DATA_DIR, 'data'),
     backupDir: resolvePath(env.BACKUP_DIR, 'backups'),
     webDistDir: resolvePath(env.WEB_DIST_DIR, 'apps/web/dist'),
@@ -61,8 +59,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     vapidPrivateKey: env.VAPID_PRIVATE_KEY as string,
     vapidSubject: env.VAPID_SUBJECT || 'mailto:nonstop@localhost',
     cookieSecure,
-    sessionDays: int(env.SESSION_DAYS, 30, 'SESSION_DAYS'),
-    backupHour,
-    backupKeepDays: int(env.BACKUP_KEEP_DAYS, 14, 'BACKUP_KEEP_DAYS'),
+    sessionDays: int(env.SESSION_DAYS, 30, 'SESSION_DAYS', 1, 3650),
+    backupHour: int(env.BACKUP_HOUR, 3, 'BACKUP_HOUR', 0, 23),
+    backupKeepDays: int(env.BACKUP_KEEP_DAYS, 14, 'BACKUP_KEEP_DAYS', 1, 3650),
   };
 }

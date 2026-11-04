@@ -26,13 +26,13 @@ export function testConfig(over: Partial<Config> = {}): Config {
   };
 }
 
-export function makeApp(opts: { sender?: PushSender; limiter?: LoginLimiter } = {}) {
+export function makeApp(opts: { sender?: PushSender; limiter?: LoginLimiter; now?: () => number } = {}) {
   const handle = openDatabase(':memory:');
   const config = testConfig();
   const push = new PushService(handle.db, config, opts.sender ?? (async () => undefined));
   const app = createApp({
     config,
-    sessions: new SessionStore(handle.db, config.sessionDays),
+    sessions: new SessionStore(handle.db, config.sessionDays, opts.now),
     limiter: opts.limiter ?? new LoginLimiter(),
     push,
   });

@@ -18,12 +18,21 @@ export interface DbHandle {
   close: () => void;
 }
 
-/** Pass ":memory:" for tests. */
-export function openDatabase(dataDir: string | ':memory:'): DbHandle {
+/**
+ * Pass ":memory:" for tests.
+ * `mustExist`: fail instead of creating an empty DB, and skip migrations (used by the backup script,
+ * so a mistyped DATA_DIR never produces an empty backup).
+ */
+export function openDatabase(dataDir: string | ':memory:', opts: { mustExist?: boolean } = {}): DbHandle {
   let file = ':memory:';
   if (dataDir !== ':memory:') {
-    fs.mkdirSync(dataDir, { recursive: true });
     file = path.join(dataDir, DB_FILE);
+    if (opts.mustExist) {
+      if (!fs.existsSync(file)) throw new Error(`Database not found: ${file}`);
+      const sqlite = new Database(file, { fileMustExist: true });
+      return { sqlite, db: drizzle(sqlite, { schema }), close: () => sqlite.close() };
+    }
+    fs.mkdirSync(dataDir, { recursive: true });
   }
   const sqlite = new Database(file);
   sqlite.pragma('journal_mode = WAL');
