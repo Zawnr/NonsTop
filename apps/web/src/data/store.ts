@@ -123,7 +123,9 @@ export class LocalStore {
         if (!table || !rec || rec._hlc[op.field] !== op.hlc) continue;
         delete (rec as Record<string, unknown>)[op.field];
         delete rec._hlc[op.field];
-        await table.put(rec);
+        // A record the server never accepted any field of would linger as an empty page: remove it.
+        if (Object.keys(rec._hlc).length === 0) await table.delete(rec.id);
+        else await table.put(rec);
       }
       await db.meta.put({ key: CURSOR_KEY, value: 0 });
     });

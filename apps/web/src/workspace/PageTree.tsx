@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import {
   DndContext,
   MouseSensor,
+  pointerWithin,
   TouchSensor,
   useDraggable,
   useDroppable,
@@ -126,6 +127,8 @@ export function PageTree({ index, currentId, onNavigate }: { index: PageIndex; c
   return (
     <DndContext
       sensors={sensors}
+      // The row under the pointer or finger is the target, matching how the drop position is computed.
+      collisionDetection={pointerWithin}
       onDragStart={(e) => setDragging(String(e.active.id))}
       onDragMove={onDragMove}
       onDragEnd={onDragEnd}

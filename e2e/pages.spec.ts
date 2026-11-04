@@ -113,15 +113,20 @@ test('conflict: concurrent offline edits keep the other version and let the user
   await phoneCtx.close();
 });
 
-test('tree: drag a page onto another to nest it, and before it to reorder', async ({ page, isMobile }) => {
+test('tree: drag a page onto another to nest it, and before it to reorder', async ({ page, context, isMobile }) => {
   test.skip(isMobile, 'mouse drag; touch uses long-press and the move dialog');
   await login(page);
+  await syncNow(page);
+  // Other tests share the server. Offline, their pages cannot land between A and B or arrive mid-drag.
+  await context.setOffline(true);
   const a = unique('Drag A');
   const b = unique('Drag B');
   await createPage(page, a);
   await createPage(page, b);
 
   const drag = async (from: string, to: string, where: 'inside' | 'before') => {
+    // A long tree scrolls inside the sidebar. Centre the target so both rows are on screen.
+    await treeLink(page, to).evaluate((el) => el.scrollIntoView({ block: 'center' }));
     const source = await treeLink(page, from).boundingBox();
     const target = await page.getByRole('treeitem').filter({ has: page.getByRole('link', { name: to, exact: true }) }).boundingBox();
     const y = where === 'inside' ? target!.y + target!.height / 2 : target!.y + 3;
@@ -141,6 +146,8 @@ test('tree: drag a page onto another to nest it, and before it to reorder', asyn
   await expect(page.getByRole('navigation', { name: 'Lokasi halaman' })).not.toContainText(a);
   const items = await page.getByRole('tree').getByRole('link').allTextContents();
   expect(items.indexOf(b)).toBe(items.indexOf(a) - 1);
+  await context.setOffline(false);
+  await syncNow(page);
 });
 
 test('move dialog: move a page under another without dragging', async ({ page }) => {

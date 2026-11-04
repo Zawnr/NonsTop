@@ -229,6 +229,15 @@ describe('SyncEngine', () => {
     expect(phone.engine.getStatus().state).toBe('synced');
   });
 
+  it('removes a new page locally when the server rejects all of its fields', async () => {
+    const server = new FakeServer();
+    server.refuse = new Set(['title', 'parentId']);
+    const { store, engine, db } = await device(server);
+    await store.write('page', 'p-new', { title: 'refused', parentId: null });
+    await engine.sync();
+    expect(await db.page.get('p-new')).toBeUndefined();
+  });
+
   it('sends everything back after the server was restored from a backup', async () => {
     const server = new FakeServer();
     const { store, engine } = await device(server);
