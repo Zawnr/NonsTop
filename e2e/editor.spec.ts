@@ -137,3 +137,38 @@ test('editor: a block added on another device appears without moving the caret',
   await laptopCtx.close();
   await phoneCtx.close();
 });
+
+test('update: a device that skipped blocks under an older app version pulls them after updating', async ({ page, browser }) => {
+  await login(page);
+  const id = await createPage(page, unique('Sebelum update'));
+  const word = unique('lama');
+  await editorOf(page).click();
+  await page.keyboard.type(`Ditulis ${word}`);
+  await page.waitForTimeout(500);
+  await syncNow(page);
+
+  const otherCtx = await browser.newContext();
+  const phone = await otherCtx.newPage();
+  await login(phone);
+  await syncNow(phone);
+  // Make the phone's local data look like it was synced by a version without blocks: the cursor is
+  // past the block changes, but no blocks were stored.
+  await phone.evaluate(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        const open = indexedDB.open('nonstop');
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const tx = open.result.transaction(['block', 'meta'], 'readwrite');
+          tx.objectStore('block').clear();
+          tx.objectStore('meta').put({ key: 'knownEntities', value: 'conflict,page' });
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        };
+      }),
+  );
+  await gotoStable(phone, `/p/${id}`);
+  await syncNow(phone);
+  await expect(phone.getByTestId('editor')).toContainText(`Ditulis ${word}`);
+  await otherCtx.close();
+});

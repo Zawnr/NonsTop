@@ -115,6 +115,16 @@ describe('LocalStore', () => {
     expect((await db.outbox.toArray()).at(-1)!.op.prevHlc).toBe(first);
   });
 
+  it('pulls everything again after an app update that knows more entities', async () => {
+    const { db, store } = await device(new FakeServer());
+    await store.applyRemote([], 120); // pulled up to 120 while running an older version
+    await db.meta.put({ key: 'knownEntities', value: 'conflict,page' }); // that version knew no blocks
+    const updated = await LocalStore.open(db);
+    expect(await updated.cursor()).toBe(0);
+    await updated.applyRemote([], 130);
+    expect(await (await LocalStore.open(db)).cursor()).toBe(130); // same version: cursor kept
+  });
+
   it('ignores remote changes older than the local value and unknown entities', async () => {
     const { db, store } = await device(new FakeServer(), { ms: 5000 });
     await store.write('page', 'p1', { title: 'local, newer' });

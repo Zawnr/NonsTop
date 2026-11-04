@@ -1,5 +1,5 @@
 // Local store: writes go to IndexedDB immediately and into the outbox for the next push.
-import { compareHlc, entities, HlcClock, type Change, type ClockState, type EntityDef, type FieldOp } from '@nonstop/shared';
+import { compareHlc, entities, entityNames, HlcClock, type Change, type ClockState, type EntityDef, type FieldOp } from '@nonstop/shared';
 import type { NonstopDb, Stored } from './db.ts';
 
 const DEVICE_KEY = 'deviceId';
@@ -7,6 +7,7 @@ const CLOCK_KEY = 'clock';
 const CURSOR_KEY = 'pullCursor';
 const EPOCH_KEY = 'serverEpoch';
 const OFFSET_KEY = 'clockOffset';
+const ENTITIES_KEY = 'knownEntities';
 
 const randomId = (length: number) => crypto.randomUUID().replace(/-/g, '').slice(0, length);
 
@@ -37,6 +38,15 @@ export class LocalStore {
     if (!deviceId) {
       deviceId = randomId(12);
       await db.meta.put({ key: DEVICE_KEY, value: deviceId });
+    }
+    // Pulls skip entities this app version does not know, but the cursor moves past them. After an
+    // update that adds entities (blocks in sprint 2), those skipped changes must be pulled again.
+    const known = [...entityNames].sort().join(',');
+    if ((await db.meta.get(ENTITIES_KEY))?.value !== known) {
+      await db.transaction('rw', db.meta, async () => {
+        await db.meta.put({ key: CURSOR_KEY, value: 0 });
+        await db.meta.put({ key: ENTITIES_KEY, value: known });
+      });
     }
     const state = (await db.meta.get(CLOCK_KEY))?.value as ClockState | undefined;
     const offset = { ms: ((await db.meta.get(OFFSET_KEY))?.value as number | undefined) ?? 0 };
