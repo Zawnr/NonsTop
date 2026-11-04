@@ -64,7 +64,7 @@ export class LocalStore {
   ): Promise<Record<string, string>[]> {
     const db = this.db;
     const result: Record<string, string>[] = [];
-    await db.transaction('rw', [db.page, db.conflict, db.outbox, db.meta], async () => {
+    await db.transaction('rw', [...db.syncedTables, db.outbox, db.meta], async () => {
       for (const { entity, id, fields, prevHlc: seen } of writes) {
         const table = db.entityTable(entity);
         if (!table) throw new Error(`Unknown entity ${entity}`);
@@ -90,7 +90,7 @@ export class LocalStore {
   /** Merges pulled changes with last-writer-wins and advances the pull cursor in the same transaction. */
   async applyRemote(changes: Change[], cursor: number): Promise<void> {
     const db = this.db;
-    await db.transaction('rw', [db.page, db.conflict, db.meta], async () => {
+    await db.transaction('rw', [...db.syncedTables, db.meta], async () => {
       for (const c of changes) {
         this.clock.receive(c.hlc);
         const table = db.entityTable(c.entity);
@@ -116,7 +116,7 @@ export class LocalStore {
    */
   async revertRejected(ops: FieldOp[]): Promise<void> {
     const db = this.db;
-    await db.transaction('rw', [db.page, db.conflict, db.meta], async () => {
+    await db.transaction('rw', [...db.syncedTables, db.meta], async () => {
       for (const op of ops) {
         const table = db.entityTable(op.entity);
         const rec = await table?.get(op.id);
@@ -138,12 +138,12 @@ export class LocalStore {
    */
   async checkEpoch(epoch: string): Promise<boolean> {
     const db = this.db;
-    return db.transaction('rw', [db.page, db.conflict, db.outbox, db.meta], async () => {
+    return db.transaction('rw', [...db.syncedTables, db.outbox, db.meta], async () => {
       const known = (await db.meta.get(EPOCH_KEY))?.value as string | undefined;
       await db.meta.put({ key: EPOCH_KEY, value: epoch });
       if (known === undefined || known === epoch) return false;
-      // Conflict records are created by the server, so only pages are replayed.
-      for (const entity of ['page'] as const) {
+      // Conflict records are created by the server, so they are not replayed.
+      for (const entity of ['page', 'block'] as const) {
         const writable = (entities as Record<string, EntityDef>)[entity]!.clientFields;
         for (const rec of await db.entityTable(entity)!.toArray()) {
           for (const [field, hlc] of Object.entries(rec._hlc)) {
