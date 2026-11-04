@@ -1,0 +1,442 @@
+openapi: 3.1.0
+info:
+  title: NonsTop API
+  version: 0.1.0
+  description: |
+    API server NonsTop: login, push notification, dan sinkron data.
+
+    **Autentikasi.** Login lewat `POST /api/auth/login`. Server mengirim cookie `nonstop_session`
+    (httpOnly). Postman dan Apidog menyimpan cookie ini otomatis, jadi request berikutnya
+    langsung terautentikasi. Semua endpoint kecuali `health` dan `auth/*` butuh cookie ini.
+
+    **Wajib untuk POST:** header `Content-Type: application/json`. Tanpa header itu, perlindungan
+    CSRF menolak request dengan `403 Forbidden`.
+
+    **Batas:** body maksimal 1 MB (`413 Payload Too Large`). Login dikunci 15 menit setelah 10 password salah.
+
+    Contoh response di dokumen ini diambil dari server sungguhan.
+servers:
+  - url: http://127.0.0.1:8787
+    description: Laptop (pnpm start atau pnpm dev)
+  - url: https://{host}
+    description: Lewat Tailscale (lihat docs/tailscale.md)
+    variables:
+      host:
+        default: nama-laptop.tailnet.ts.net
+        description: Alamat dari `tailscale serve status`
+tags:
+  - name: System
+  - name: Auth
+  - name: Push
+    description: Web Push untuk pengingat. Subscription biasanya dibuat browser, bukan manual.
+  - name: Sync
+    description: |
+      Sinkron per field dengan last-writer-wins. Tiap perubahan adalah satu operasi
+      `(entity, id, field, value, hlc)`. Client mengirim operasi lewat push, lalu mengambil
+      semua perubahan baru lewat pull. Entity dan field yang valid ada di `packages/shared/src/sync.ts`.
+security:
+  - session: []
+paths:
+  /api/health:
+    get:
+      operationId: health
+      tags: [System]
+      summary: Cek server hidup
+      security: []
+      responses:
+        '200':
+          description: Server berjalan
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthInfo' }
+              example: { ok: true, version: 0.1.0 }
+
+  /api/auth/login:
+    post:
+      operationId: login
+      tags: [Auth]
+      summary: Login dengan password
+      description: Berhasil login mengirim cookie sesi `nonstop_session` (berlaku 30 hari, diperpanjang otomatis saat dipakai).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+            example: { password: password-nonstop-kamu }
+      responses:
+        '200':
+          description: Login berhasil
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+              example: nonstop_session=VfBjYUGYuXbx...; Max-Age=2592000; Path=/; HttpOnly; SameSite=Lax
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionInfo' }
+              example: { authenticated: true }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401':
+          description: Password salah
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: wrong_password }
+        '403': { $ref: '#/components/responses/CsrfForbidden' }
+        '429':
+          description: Terlalu banyak password salah (10 kali dalam 15 menit)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: too_many_attempts }
+
+  /api/auth/logout:
+    post:
+      operationId: logout
+      tags: [Auth]
+      summary: Logout
+      description: Mencabut sesi di server dan menghapus cookie.
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object }
+            example: {}
+      responses:
+        '200':
+          description: Sesi dicabut
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionInfo' }
+              example: { authenticated: false }
+
+  /api/auth/session:
+    get:
+      operationId: getSession
+      tags: [Auth]
+      summary: Cek status login
+      security: []
+      responses:
+        '200':
+          description: Status sesi dari cookie yang dikirim
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionInfo' }
+              examples:
+                loggedIn: { value: { authenticated: true } }
+                loggedOut: { value: { authenticated: false } }
+
+  /api/push/public-key:
+    get:
+      operationId: getPushPublicKey
+      tags: [Push]
+      summary: Kunci publik VAPID
+      description: Dipakai browser saat membuat push subscription.
+      responses:
+        '200':
+          description: Kunci publik
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PushPublicKey' }
+              example: { publicKey: BMRA9kPgY5gayqdXPsywCUae9e2sKny_gYPacHyj8bv7fMxpF00JQyriaFDHZu8HMwn8PVeVqK6-oc0v9pnyghw }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/push/subscribe:
+    post:
+      operationId: subscribePush
+      tags: [Push]
+      summary: Daftarkan perangkat untuk push notification
+      description: |
+        Biasanya dipanggil browser lewat tombol "Aktifkan notifikasi". Endpoint wajib HTTPS.
+        Mendaftar ulang endpoint yang sama hanya memperbarui datanya.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PushSubscriptionRequest' }
+            example:
+              endpoint: https://fcm.googleapis.com/fcm/send/abc123
+              keys: { p256dh: BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM, auth: tBHItJI5svbpez7KI4CCXg }
+              deviceLabel: HP vivo
+      responses:
+        '200':
+          description: Tersimpan
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Ok' }
+              example: { ok: true }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/push/test:
+    post:
+      operationId: sendTestPush
+      tags: [Push]
+      summary: Kirim notifikasi tes ke semua perangkat
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object }
+            example: {}
+      responses:
+        '200':
+          description: Jumlah perangkat yang dikirimi. Subscription yang sudah mati (404/410) dihapus otomatis.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PushTestResult' }
+              example: { sent: 0, failed: 0 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/sync/push:
+    post:
+      operationId: syncPush
+      tags: [Sync]
+      summary: Kirim perubahan (operasi per field)
+      description: |
+        Satu batch maksimal 500 operasi dan diterapkan dalam satu transaksi.
+
+        - Per field, timestamp `hlc` terbaru menang. Write yang kalah tetap disimpan di log server.
+        - Kalau dua perangkat mengedit judul halaman tanpa melihat edit satu sama lain (`prevHlc` bukan
+          versi terakhir di server), nilai yang kalah disimpan sebagai entity `conflict` dan muncul
+          sebagai penanda "Ada versi lain".
+        - Operasi yang tidak valid (entity/field tidak dikenal, nilai salah, `hlc` lebih dari 1 hari di
+          depan jam server) tidak menggagalkan batch. `opId`-nya dikembalikan di `rejected`.
+        - Mengirim ulang `opId` yang sama tidak menulis dua kali (idempoten).
+
+        **Format `hlc`:** `<epoch ms 13 digit>-<counter 4 hex>-<device id>`, contoh `1793798578085-0000-postman`.
+        Untuk uji manual, pakai waktu sekarang dalam milidetik dan naikkan angkanya tiap kali mengedit field yang sama.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PushRequest' }
+            examples:
+              createPage:
+                summary: Buat halaman baru (satu operasi per field)
+                value:
+                  ops:
+                    - { opId: op-1, entity: page, id: page-1, field: title, value: Halaman dari Postman, hlc: 1793798578085-0000-postman, prevHlc: null }
+                    - { opId: op-2, entity: page, id: page-1, field: parentId, value: null, hlc: 1793798578085-0001-postman, prevHlc: null }
+                    - { opId: op-3, entity: page, id: page-1, field: sortKey, value: a0, hlc: 1793798578085-0002-postman, prevHlc: null }
+                    - { opId: op-4, entity: page, id: page-1, field: createdAt, value: 1793798578085, hlc: 1793798578085-0003-postman, prevHlc: null }
+              rename:
+                summary: Ganti judul, setelah melihat versi terakhir
+                value:
+                  ops:
+                    - { opId: op-5, entity: page, id: page-1, field: title, value: Judul baru, hlc: 1793798590000-0000-postman, prevHlc: 1793798578085-0000-postman }
+              withInvalidOp:
+                summary: Satu operasi valid, satu ditolak
+                value:
+                  ops:
+                    - { opId: op-1, entity: page, id: page-1, field: title, value: Halaman dari Postman, hlc: 1793798578085-0000-postman, prevHlc: null }
+                    - { opId: op-2, entity: page, id: page-1, field: owner, value: x, hlc: 1793798578086-0000-postman, prevHlc: null }
+      responses:
+        '200':
+          description: Batch diproses
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PushResponse' }
+              examples:
+                allAccepted: { value: { ok: true, lastSeq: 4, rejected: [], serverTime: 1793798578267 } }
+                oneRejected: { value: { ok: true, lastSeq: 1, rejected: [op-2], serverTime: 1793798578267 } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CsrfForbidden' }
+        '413': { $ref: '#/components/responses/TooLarge' }
+
+  /api/sync/pull:
+    get:
+      operationId: syncPull
+      tags: [Sync]
+      summary: Ambil perubahan sejak kursor
+      description: |
+        Mengembalikan perubahan yang diterapkan (pemenang LWW) dengan `seq > since`, urut naik, maksimal 1000.
+        Kalau `more` bernilai true, panggil lagi dengan `since = lastSeq`.
+
+        `epoch` berubah setelah server di-restore dari backup. Client yang melihat epoch baru mengirim
+        ulang semua datanya dan pull dari 0.
+      parameters:
+        - name: since
+          in: query
+          description: Kursor dari pull sebelumnya. 0 untuk mengambil semuanya.
+          schema: { type: integer, minimum: 0, default: 0 }
+          example: 0
+      responses:
+        '200':
+          description: Perubahan
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PullResponse' }
+              example:
+                changes:
+                  - { seq: 1, entity: page, id: page-1, field: title, value: Halaman dari Postman, hlc: 1793798578085-0000-postman }
+                lastSeq: 1
+                more: false
+                epoch: 9c8ba143-547a-4b02-aa8d-12e38bccab75
+                serverTime: 1793798578276
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+components:
+  securitySchemes:
+    session:
+      type: apiKey
+      in: cookie
+      name: nonstop_session
+      description: Didapat dari POST /api/auth/login. Postman dan Apidog menyimpannya otomatis.
+
+  responses:
+    InvalidRequest:
+      description: Body atau parameter tidak sesuai skema
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { error: invalid_request }
+    Unauthorized:
+      description: Belum login atau sesi kedaluwarsa
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { error: unauthorized }
+    CsrfForbidden:
+      description: POST tanpa `Content-Type application/json` (perlindungan CSRF)
+      content:
+        text/plain:
+          schema: { type: string }
+          example: Forbidden
+    TooLarge:
+      description: Body lebih dari 1 MB
+      content:
+        text/plain:
+          schema: { type: string }
+          example: Payload Too Large
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          enum: [invalid_request, wrong_password, too_many_attempts, unauthorized, not_found]
+    Ok:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean, const: true }
+    HealthInfo:
+      type: object
+      required: [ok, version]
+      properties:
+        ok: { type: boolean, const: true }
+        version: { type: string }
+    LoginRequest:
+      type: object
+      required: [password]
+      properties:
+        password: { type: string, minLength: 1, maxLength: 256 }
+    SessionInfo:
+      type: object
+      required: [authenticated]
+      properties:
+        authenticated: { type: boolean }
+    PushPublicKey:
+      type: object
+      required: [publicKey]
+      properties:
+        publicKey: { type: string }
+    PushSubscriptionRequest:
+      type: object
+      required: [endpoint, keys]
+      properties:
+        endpoint: { type: string, format: uri, maxLength: 2048, pattern: '^https://', description: Selalu HTTPS }
+        keys:
+          type: object
+          required: [p256dh, auth]
+          properties:
+            p256dh: { type: string, minLength: 1, maxLength: 512 }
+            auth: { type: string, minLength: 1, maxLength: 512 }
+        deviceLabel: { type: string, maxLength: 100 }
+    PushTestResult:
+      type: object
+      required: [sent, failed]
+      properties:
+        sent: { type: integer }
+        failed: { type: integer }
+
+    Id:
+      type: string
+      pattern: '^[A-Za-z0-9_-]{1,64}$'
+    Hlc:
+      type: string
+      description: 'Hybrid logical clock: `<epoch ms 13 digit>-<counter 4 hex>-<device id>`. Diurutkan sebagai string.'
+      pattern: '^\d{13}-[0-9a-f]{4}-[A-Za-z0-9_-]{1,64}$'
+      example: 1793798578085-0000-postman
+    FieldOp:
+      type: object
+      required: [opId, entity, id, field, value, hlc, prevHlc]
+      properties:
+        opId:
+          allOf: [{ $ref: '#/components/schemas/Id' }]
+          description: Unik per operasi. Membuat push idempoten.
+        entity:
+          type: string
+          enum: [page, conflict]
+          description: '`conflict` hanya boleh field `resolved`, dan hanya untuk conflict yang sudah ada.'
+        id: { $ref: '#/components/schemas/Id' }
+        field:
+          type: string
+          description: |
+            page: `title` (string ≤ 500), `parentId` (Id atau null), `sortKey` (base62, 1–128 karakter),
+            `isFavorite` (boolean), `trashedAt` (epoch ms atau null), `deleted` (boolean), `createdAt` (epoch ms).
+            conflict: `resolved` (boolean).
+          examples: [title, parentId, sortKey, isFavorite, trashedAt, deleted, createdAt, resolved]
+        value:
+          description: Nilai baru, tipenya tergantung field.
+        hlc: { $ref: '#/components/schemas/Hlc' }
+        prevHlc:
+          description: HLC versi yang dilihat perangkat sebelum mengedit. null jika field belum pernah ada.
+          oneOf: [{ $ref: '#/components/schemas/Hlc' }, { type: 'null' }]
+        replay:
+          type: boolean
+          description: Kirim ulang setelah server di-restore. Diterapkan dengan LWW tanpa membuat conflict.
+    PushRequest:
+      type: object
+      required: [ops]
+      properties:
+        ops:
+          type: array
+          maxItems: 500
+          items: { $ref: '#/components/schemas/FieldOp' }
+    PushResponse:
+      type: object
+      required: [ok, lastSeq, rejected, serverTime]
+      properties:
+        ok: { type: boolean, const: true }
+        lastSeq: { type: integer, description: seq terakhir di log server }
+        rejected:
+          type: array
+          items: { type: string }
+          description: opId yang ditolak validasi
+        serverTime: { type: integer, description: Jam server (epoch ms) }
+    Change:
+      type: object
+      required: [seq, entity, id, field, value, hlc]
+      properties:
+        seq: { type: integer }
+        entity: { type: string }
+        id: { type: string }
+        field: { type: string }
+        value: {}
+        hlc: { $ref: '#/components/schemas/Hlc' }
+    PullResponse:
+      type: object
+      required: [changes, lastSeq, more, epoch, serverTime]
+      properties:
+        changes:
+          type: array
+          items: { $ref: '#/components/schemas/Change' }
+        lastSeq: { type: integer, description: Kursor untuk pull berikutnya }
+        more: { type: boolean, description: Masih ada perubahan. Pull lagi dengan since = lastSeq. }
+        epoch: { type: string, description: Identitas salinan database. Berubah setelah restore. }
+        serverTime: { type: integer, description: Jam server (epoch ms) }
