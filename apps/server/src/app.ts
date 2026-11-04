@@ -10,13 +10,16 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import {
   loginRequest,
   pushSubscriptionRequest,
+  pushRequest,
   type HealthInfo,
+  type PushResponse,
   type PushPublicKey,
   type SessionInfo,
 } from '@nonstop/shared';
 import type { Config } from './config.ts';
 import { verifyPassword, type LoginLimiter, type SessionStore } from './auth.ts';
 import type { PushService } from './push.ts';
+import type { SyncService } from './sync.ts';
 
 export const SESSION_COOKIE = 'nonstop_session';
 export const VERSION = '0.1.0';
@@ -26,6 +29,7 @@ export interface AppDeps {
   sessions: SessionStore;
   limiter: LoginLimiter;
   push: PushService;
+  sync: SyncService;
   /** Serve the built web app (production). Off in tests and in dev (Vite serves it). */
   serveWeb?: boolean;
 }
@@ -35,7 +39,7 @@ function isHttps(c: Context): boolean {
 }
 
 export function createApp(deps: AppDeps): Hono {
-  const { config, sessions, limiter, push } = deps;
+  const { config, sessions, limiter, push, sync } = deps;
   const app = new Hono();
 
   const setSessionCookie = (c: Context, token: string) =>
@@ -106,6 +110,20 @@ export function createApp(deps: AppDeps): Hono {
       url: '/',
     });
     return c.json(result);
+  });
+
+  app.post('/api/sync/push', async (c) => {
+    const parsed = pushRequest.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: 'invalid_request' }, 400);
+    const result = sync.push(parsed.data.ops);
+    if (result.rejected.length) console.warn('[sync] rejected ops', result.rejected);
+    return c.json<PushResponse>({ ok: true, lastSeq: result.lastSeq, rejected: result.rejected.map((r) => r.opId) });
+  });
+
+  app.get('/api/sync/pull', (c) => {
+    const since = Number(c.req.query('since') ?? '0');
+    if (!Number.isSafeInteger(since) || since < 0) return c.json({ error: 'invalid_request' }, 400);
+    return c.json(sync.pull(since));
   });
 
   app.all('/api/*', (c) => c.json({ error: 'not_found' }, 404));

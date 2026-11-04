@@ -115,6 +115,8 @@ export type PushRequest = z.infer<typeof pushRequest>;
 export interface PushResponse {
   ok: true;
   lastSeq: number;
+  /** opIds the server refused (invalid field or value). The client drops them from its queue. */
+  rejected: string[];
 }
 
 export interface Change {
