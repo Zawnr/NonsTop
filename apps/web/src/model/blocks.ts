@@ -194,15 +194,6 @@ export function assignSortKeys(old: (string | null)[]): string[] {
   return out;
 }
 
-/** True if the stored blocks differ from the snapshot in anything the editor shows. */
-export function differs(snapshot: Snapshot, blocks: FlatBlock[]): boolean {
-  if (snapshot.size !== blocks.length) return true;
-  return blocks.some((b) => {
-    const s = snapshot.get(b.id);
-    return !s || s.parentId !== b.parentId || s.sortKey !== b.sortKey || s.type !== b.type || !sameValue(s.props, b.props) || !sameValue(s.content, b.content);
-  });
-}
-
 /** Plain text of a block's inline content, for search and conflict previews. */
 export function contentText(content: unknown): string {
   if (!Array.isArray(content)) return '';

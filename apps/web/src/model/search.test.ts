@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Block, Page } from '@nonstop/shared';
 import type { Stored } from '../data/db.ts';
 import { indexPages } from './pages.ts';
-import { buildSearchIndex, search, searchDocs, snippet } from './search.ts';
+import { buildSearchIndex, matchRanges, search, searchDocs, snippet } from './search.ts';
 
 const page = (id: string, title: string, over: Partial<Page> = {}): Page => ({
   id,
@@ -61,5 +61,19 @@ describe('search', () => {
     const s = snippet(long, ['target']);
     expect(s.length).toBeLessThanOrEqual(122);
     expect(s).toContain('target');
+  });
+});
+
+describe('matchRanges', () => {
+  it('maps matches in normalized text back to the original, including accents and decomposed text', () => {
+    expect(matchRanges('Café enak', ['cafe'])).toEqual([[0, 4]]);
+    const decomposed = 'Cafe\u0301 di kantor'; // "é" stored as e + combining accent
+    const [[start, end]] = matchRanges(decomposed, ['kantor']) as [[number, number]];
+    expect(decomposed.slice(start, end)).toBe('kantor');
+    expect(matchRanges('İstanbul ist', ['ist']).length).toBe(2);
+  });
+
+  it('merges overlapping matches', () => {
+    expect(matchRanges('kopikopi', ['kopi', 'ikop'])).toEqual([[0, 8]]);
   });
 });

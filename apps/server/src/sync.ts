@@ -52,6 +52,8 @@ export class SyncService {
 
   push(ops: FieldOp[]): PushResult {
     const rejected: PushResult['rejected'] = [];
+    // pageId of blocks created in this batch, for conflicts on blocks whose pageId is not stored yet.
+    const batchPageIds = new Map(ops.filter((o) => o.field === 'pageId' && typeof o.value === 'string').map((o) => [`${o.entity}/${o.id}`, o.value as string]));
     // One synchronous transaction: a batch is applied completely or not at all.
     this.db.transaction((tx) => {
       for (const op of ops) {
@@ -73,7 +75,9 @@ export class SyncService {
         const current = this.field(tx, op.entity, op.id, op.field);
         const result = mergeField(current, op);
         this.record(tx, { ...op, applied: result.apply });
-        if (result.lost && !op.replay && isConflictField(op.entity, op.field)) this.addConflict(tx, op, result.lost);
+        if (result.lost && !op.replay && isConflictField(op.entity, op.field)) {
+          this.addConflict(tx, op, result.lost, batchPageIds.get(`${op.entity}/${op.id}`));
+        }
       }
     });
     return { lastSeq: this.lastSeq(), rejected };
@@ -152,14 +156,14 @@ export class SyncService {
   }
 
   /** Stores the losing version as a conflict record. Clients sync it like any entity and show a marker. */
-  private addConflict(tx: Tx, op: FieldOp, lost: LostVersion) {
+  private addConflict(tx: Tx, op: FieldOp, lost: LostVersion, batchPageId?: string) {
     const id = randomUUID();
     const fields: Record<string, unknown> = {
       entity: op.entity,
       entityId: op.id,
       field: op.field,
       // The page the marker shows on: the page itself, or the page a block belongs to.
-      pageId: op.entity === 'page' ? op.id : String(this.field(tx, op.entity, op.id, 'pageId')?.value ?? op.id),
+      pageId: op.entity === 'page' ? op.id : String(this.field(tx, op.entity, op.id, 'pageId')?.value ?? batchPageId ?? op.id),
       value: lost.value,
       hlc: lost.hlc,
       deviceId: lost.deviceId,

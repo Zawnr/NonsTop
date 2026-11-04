@@ -20,7 +20,9 @@ export function Workspace({ onLogout }: { onLogout: () => void }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      // Inside the editor, Ctrl/Cmd+K creates a link, so search only takes it elsewhere.
+      const inEditor = e.target instanceof HTMLElement && e.target.isContentEditable;
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k' && !inEditor) {
         e.preventDefault();
         setSearching(true);
       }

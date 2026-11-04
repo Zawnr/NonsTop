@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { HlcClock } from '../src/hlc.ts';
-import { mergeField, type FieldState } from '../src/merge.ts';
+import { mergeField, sameValue, type FieldState } from '../src/merge.ts';
 
 describe('mergeField (last writer wins)', () => {
   const laptop = new HlcClock('laptop', () => 1000);
@@ -41,5 +41,13 @@ describe('mergeField (last writer wins)', () => {
   it('reports no conflict when concurrent edits wrote the same value', () => {
     const current: FieldState = { value: 'same', hlc: phone.now() };
     expect(mergeField(current, { value: 'same', hlc: laptop.now(), prevHlc: null }).lost).toBeNull();
+  });
+});
+
+describe('sameValue', () => {
+  it('ignores object key order but not array order', () => {
+    expect(sameValue({ a: 1, b: { c: 2, d: 3 } }, { b: { d: 3, c: 2 }, a: 1 })).toBe(true);
+    expect(sameValue([1, 2], [2, 1])).toBe(false);
+    expect(sameValue(null, undefined)).toBe(false);
   });
 });

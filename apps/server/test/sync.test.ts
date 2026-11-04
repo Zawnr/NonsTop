@@ -272,6 +272,22 @@ describe('two devices', () => {
     expect(laptop.get('conflict', conflict!.id, 'pageId')).toBe('p1');
   });
 
+  it('finds the page of a block conflict from the same batch when the block is not stored yet', async () => {
+    const { sync } = await setup();
+    const laptop = new HlcClock('laptop', () => 1000);
+    const phone = new HlcClock('phone', () => 2000);
+    const phoneHlc = phone.now();
+    // The phone's newer content arrives first, alone (its pageId op was lost or comes later).
+    sync.push([{ opId: 'x1', entity: 'block', id: 'b9', field: 'content', value: ['HP'], hlc: phoneHlc, prevHlc: null }]);
+    // The laptop's batch has the older content (which loses) before the block's pageId.
+    sync.push([
+      { opId: 'x3', entity: 'block', id: 'b9', field: 'content', value: ['laptop'], hlc: laptop.now(), prevHlc: null },
+      { opId: 'x2', entity: 'block', id: 'b9', field: 'pageId', value: 'p9', hlc: laptop.now(), prevHlc: null },
+    ]);
+    const conflictPage = sync.pull(0).changes.find((c) => c.entity === 'conflict' && c.field === 'pageId');
+    expect(conflictPage?.value).toBe('p9');
+  });
+
   it('a conflict can be resolved from either device', async () => {
     const { app, cookie, laptop, phone, wall } = await setup();
     laptop.write('page', 'p1', 'title', 'a');

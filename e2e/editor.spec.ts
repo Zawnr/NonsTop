@@ -3,6 +3,13 @@ import { createPage, gotoStable, login, openNav, syncNow, unique, waitForService
 
 const editorOf = (page: Page) => page.getByTestId('editor').locator('[contenteditable="true"]');
 
+/** Puts the caret at the end of a piece of text in the editor. */
+async function caretAfter(page: Page, text: string) {
+  const target = page.getByTestId('editor').getByText(text, { exact: true });
+  const box = (await target.boundingBox())!;
+  await target.click({ position: { x: box.width - 1, y: box.height / 2 } });
+}
+
 /** Picks a block type from the slash menu. */
 async function slash(page: Page, query: string, option: string) {
   await page.keyboard.type(`/${query}`);
@@ -91,4 +98,42 @@ test('search: finds a page by a word in its text and opens it', async ({ page })
   await page.getByRole('searchbox', { name: 'Cari' }).fill(word);
   await result.click();
   await expect(page).toHaveURL(new RegExp(`/p/${id}$`));
+});
+
+test('editor: a block added on another device appears without moving the caret', async ({ browser }) => {
+  const laptopCtx = await browser.newContext();
+  const phoneCtx = await browser.newContext();
+  const laptop = await laptopCtx.newPage();
+  const phone = await phoneCtx.newPage();
+  await login(laptop);
+  await login(phone);
+
+  const id = await createPage(laptop, unique('Bersama'));
+  await editorOf(laptop).click();
+  await laptop.keyboard.type('Halo');
+  await laptop.waitForTimeout(500);
+  await syncNow(laptop);
+
+  // Put the laptop's caret in the middle of "Halo" ("Ha|lo"); the badge click took the focus.
+  await caretAfter(laptop, 'Halo');
+  await laptop.keyboard.press('ArrowLeft');
+  await laptop.keyboard.press('ArrowLeft');
+
+  await gotoStable(phone, `/p/${id}`);
+  await expect(phone.getByTestId('editor')).toContainText('Halo');
+  await caretAfter(phone, 'Halo');
+  await phone.keyboard.press('Enter');
+  await phone.keyboard.type('Dari HP');
+  await phone.waitForTimeout(500);
+  await syncNow(phone);
+
+  // The laptop still has its caret inside "Halo" while the phone's block arrives.
+  // Sync without clicking the badge, which would take the focus out of the editor.
+  await laptop.evaluate(() => window.dispatchEvent(new Event('online')));
+  await expect(laptop.getByTestId('editor')).toContainText('Dari HP');
+  await laptop.keyboard.type('!');
+  await expect(laptop.getByTestId('editor').locator('.bn-block-content').first()).toHaveText('Ha!lo');
+
+  await laptopCtx.close();
+  await phoneCtx.close();
 });

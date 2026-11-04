@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildDocument, contentText, differs, diffDocument, liveBlocks, toSnapshot, type DocBlock, type FlatBlock } from './blocks.ts';
+import { assignSortKeys, buildDocument, contentText, diffDocument, liveBlocks, type DocBlock, type FlatBlock } from './blocks.ts';
 
 const text = (t: string) => [{ type: 'text', text: t, styles: {} }];
 const flat = (id: string, over: Partial<FlatBlock> = {}): FlatBlock => ({
@@ -90,13 +90,12 @@ describe('diffDocument', () => {
   });
 });
 
-describe('differs and contentText', () => {
-  it('detects remote changes against the snapshot', () => {
-    const blocks = [flat('a'), flat('b', { sortKey: 'a1' })];
-    const snap = toSnapshot(blocks);
-    expect(differs(snap, blocks)).toBe(false);
-    expect(differs(snap, [blocks[0]!, { ...blocks[1]!, content: text('remote') }])).toBe(true);
-    expect(differs(snap, [blocks[0]!])).toBe(true);
+describe('sort keys and contentText', () => {
+  it('keeps the longest run of ordered keys', () => {
+    const keys = assignSortKeys(['a0', 'a3', 'a1', 'a2', null]);
+    expect(keys[0]).toBe('a0');
+    expect(keys.slice(2, 4)).toEqual(['a1', 'a2']);
+    expect([...keys].sort()).toEqual(keys);
   });
 
   it('extracts plain text from inline content and links', () => {

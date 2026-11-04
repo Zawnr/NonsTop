@@ -1,9 +1,9 @@
 // Search (F-51): titles and page text, from local data, so it works offline. Ctrl/Cmd+K opens it.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
+import type MiniSearch from 'minisearch';
 import { useStore } from '../data/workspace.tsx';
 import type { PageIndex } from '../model/pages.ts';
-import { buildSearchIndex, search, searchDocs } from '../model/search.ts';
+import { buildSearchIndex, matchRanges, search, searchDocs, type SearchDoc } from '../model/search.ts';
 import { navigate, pagePath } from '../router.ts';
 
 export function SearchDialog({ index, onClose }: { index: PageIndex; onClose: () => void }) {
@@ -11,9 +11,17 @@ export function SearchDialog({ index, onClose }: { index: PageIndex; onClose: ()
   const ref = useRef<HTMLDialogElement>(null);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
-  const blocks = useLiveQuery(() => store.db.block.toArray(), [store]);
-  const ms = useMemo(() => buildSearchIndex(searchDocs(index, blocks ?? [])), [index, blocks]);
-  const hits = useMemo(() => search(ms, query), [ms, query]);
+  const [ms, setMs] = useState<MiniSearch<SearchDoc> | null>(null);
+  // Built once when the dialog opens: rebuilding on every save while typing elsewhere is wasted work.
+  useEffect(() => {
+    let cancelled = false;
+    void store.db.block.toArray().then((blocks) => !cancelled && setMs(buildSearchIndex(searchDocs(index, blocks))));
+    return () => {
+      cancelled = true;
+    };
+    // index is read once, at open.
+  }, [store]);
+  const hits = useMemo(() => (ms ? search(ms, query) : []), [ms, query]);
 
   useEffect(() => {
     ref.current?.showModal();
@@ -59,8 +67,15 @@ export function SearchDialog({ index, onClose }: { index: PageIndex; onClose: ()
 }
 
 function highlight(text: string, terms: string[]) {
-  if (!terms.length) return text;
-  const escaped = terms.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  const parts = text.split(new RegExp(`(${escaped.join('|')})`, 'gi'));
-  return parts.map((part, i) => (i % 2 === 1 ? <mark key={i}>{part}</mark> : part));
+  const ranges = matchRanges(text, terms);
+  if (!ranges.length) return text;
+  const out: (string | React.JSX.Element)[] = [];
+  let pos = 0;
+  ranges.forEach(([start, end], i) => {
+    if (start > pos) out.push(text.slice(pos, start));
+    out.push(<mark key={i}>{text.slice(start, end)}</mark>);
+    pos = end;
+  });
+  if (pos < text.length) out.push(text.slice(pos));
+  return out;
 }

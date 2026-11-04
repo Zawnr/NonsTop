@@ -37,6 +37,44 @@ export function searchDocs(index: PageIndex, blocks: Stored<Block>[]): SearchDoc
 /** Case and accent insensitive, so "kopi" finds "Kopi" and "cafe" finds "café". */
 const normalize = (term: string) => term.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
 
+/**
+ * Normalized text plus, for each of its characters, the index of the original character it came
+ * from. Normalizing can change the length ("é" in NFD, "İ"), so offsets must be mapped back.
+ */
+export function normalizeWithMap(text: string): { norm: string; map: number[] } {
+  let norm = '';
+  const map: number[] = [];
+  let i = 0;
+  for (const ch of text) {
+    const n = normalize(ch);
+    norm += n;
+    for (let k = 0; k < n.length; k++) map.push(i);
+    i += ch.length;
+  }
+  map.push(text.length);
+  return { norm, map };
+}
+
+/** Ranges [start, end) in the original text where any of the (normalized) terms occur. */
+export function matchRanges(text: string, terms: string[]): [number, number][] {
+  const { norm, map } = normalizeWithMap(text);
+  const ranges: [number, number][] = [];
+  for (const term of terms) {
+    if (!term) continue;
+    for (let at = norm.indexOf(term); at !== -1; at = norm.indexOf(term, at + term.length)) {
+      ranges.push([map[at]!, map[at + term.length]!]);
+    }
+  }
+  ranges.sort((a, b) => a[0] - b[0]);
+  const merged: [number, number][] = [];
+  for (const r of ranges) {
+    const last = merged.at(-1);
+    if (last && r[0] <= last[1]) last[1] = Math.max(last[1], r[1]);
+    else merged.push([...r]);
+  }
+  return merged;
+}
+
 export function buildSearchIndex(docs: SearchDoc[]): MiniSearch<SearchDoc> {
   const ms = new MiniSearch<SearchDoc>({
     fields: ['title', 'text'],
@@ -64,8 +102,7 @@ export function search(ms: MiniSearch<SearchDoc>, query: string, limit = 20): Se
 /** The line around the first matching term, shortened to about 120 characters. */
 export function snippet(text: string, terms: string[]): string {
   if (!text) return '';
-  const lower = normalize(text);
-  const at = terms.map((t) => lower.indexOf(t)).filter((i) => i >= 0).sort((a, b) => a - b)[0] ?? 0;
+  const at = matchRanges(text, terms)[0]?.[0] ?? 0;
   const lineStart = text.lastIndexOf('\n', at) + 1;
   const lineEnd = text.indexOf('\n', at);
   const line = text.slice(lineStart, lineEnd === -1 ? undefined : lineEnd);
