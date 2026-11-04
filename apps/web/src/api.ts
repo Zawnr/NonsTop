@@ -18,12 +18,17 @@ export class ApiError extends Error {
   }
 }
 
+/** The request never reached the server (offline, DNS, connection refused). */
+export class NetworkError extends Error {}
+
 async function request<T>(method: 'GET' | 'POST', url: string, body?: unknown): Promise<T> {
   const res = await fetch(url, {
     method,
     credentials: 'same-origin',
     headers: body === undefined ? {} : { 'content-type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
+  }).catch((err: unknown) => {
+    throw new NetworkError(err instanceof Error ? err.message : 'network error');
   });
   const data = (await res.json().catch(() => ({}))) as { error?: string };
   if (!res.ok) throw new ApiError(res.status, data.error ?? 'unknown_error');
@@ -43,5 +48,5 @@ export const api = {
 
 /** No connection: fetch failed, or the Tailscale proxy answered because the NonsTop server is down. */
 export function isOfflineError(err: unknown): boolean {
-  return err instanceof TypeError || (err instanceof ApiError && [502, 503, 504].includes(err.status));
+  return err instanceof NetworkError || (err instanceof ApiError && [502, 503, 504].includes(err.status));
 }

@@ -54,3 +54,9 @@ export const changes = sqliteTable(
   },
   (t) => [index('changes_applied_seq').on(t.applied, t.seq)],
 );
+
+/** Server-wide settings. `epoch` identifies this copy of the database (new value after a restore). */
+export const serverMeta = sqliteTable('server_meta', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+});

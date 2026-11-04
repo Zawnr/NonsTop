@@ -3,7 +3,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type Database from 'better-sqlite3';
-import { DB_FILE } from './db/client.ts';
+import { DB_FILE, openDatabase } from './db/client.ts';
+import { resetEpoch } from './sync.ts';
 
 export const FILES_DIR = 'files';
 export const PID_FILE = 'server.pid';
@@ -92,6 +93,14 @@ export function restoreBackup(name: string, dataDir: string, backupDir: string, 
   fs.copyFileSync(path.join(source, DB_FILE), path.join(dataDir, DB_FILE));
   const files = path.join(source, FILES_DIR);
   if (fs.existsSync(files)) fs.cpSync(files, path.join(dataDir, FILES_DIR), { recursive: true });
+  // A new epoch tells every device that the server lost recent changes: they pull everything again
+  // and re-send what they have, so edits made after the backup come back from the devices.
+  const restored = openDatabase(dataDir);
+  try {
+    resetEpoch(restored.db);
+  } finally {
+    restored.close();
+  }
   return keep;
 }
 

@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { openDatabase } from '../src/db/client.ts';
+import { SyncService } from '../src/sync.ts';
 import {
   createBackup,
   listBackups,
@@ -52,6 +53,17 @@ describe('backup and restore', () => {
     expect(fs.readFileSync(path.join(dataDir, 'files', 'note.txt'), 'utf8')).toBe('hello');
     // The damaged state is kept, not deleted.
     expect(fs.existsSync(path.join(kept, 'nonstop.db'))).toBe(true);
+  });
+
+  it('gives the restored database a new sync epoch, so devices resync', async () => {
+    const h = openDatabase(dataDir);
+    const before = new SyncService(h.db).epoch;
+    const name = await createBackup(h.sqlite, dataDir, backupDir, new Date(2026, 10, 4, 3, 0, 0));
+    h.close();
+    restoreBackup(name, dataDir, backupDir);
+    const after = openDatabase(dataDir);
+    expect(new SyncService(after.db).epoch).not.toBe(before);
+    after.close();
   });
 
   it('refuses to restore while the server is running', async () => {

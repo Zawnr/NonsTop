@@ -19,7 +19,14 @@ export async function createPage(store: LocalStore, index: PageIndex, parentId: 
   return id;
 }
 
-export const renamePage = (store: LocalStore, id: string, title: string) => store.write('page', id, { title });
+/**
+ * Renames a page. `baseHlc` is the HLC of the title the user started from (undefined = the stored one).
+ * Resolves to the HLC of this write.
+ */
+export async function renamePage(store: LocalStore, id: string, title: string, baseHlc?: string | null): Promise<string> {
+  const opts = baseHlc === undefined ? {} : { prevHlc: { title: baseHlc } };
+  return (await store.write('page', id, { title }, opts)).title!;
+}
 
 export const movePage = (store: LocalStore, id: string, place: Placement) =>
   store.write('page', id, { parentId: place.parentId, sortKey: place.sortKey });

@@ -102,6 +102,24 @@ describe('sync API', () => {
     expect(pulled.changes.map((c) => c.value)).toEqual(['ok']);
   });
 
+  it('rejects writes stamped more than a day ahead of server time', async () => {
+    const { sync } = await setup();
+    const farFuture = new HlcClock('broken', () => Date.now() + 2 * 24 * 60 * 60 * 1000).now();
+    const ok = new HlcClock('fine').now();
+    const result = sync.push([
+      { opId: 'f1', entity: 'page', id: 'p1', field: 'title', value: 'x', hlc: farFuture, prevHlc: null },
+      { opId: 'f2', entity: 'page', id: 'p2', field: 'title', value: 'y', hlc: ok, prevHlc: null },
+    ]);
+    expect(result.rejected.map((r) => r.opId)).toEqual(['f1']);
+  });
+
+  it('returns epoch and server time with every pull', async () => {
+    const { sync } = await setup();
+    const res = sync.pull(0);
+    expect(res.epoch).toBe(sync.epoch);
+    expect(res.serverTime).toBeGreaterThan(0);
+  });
+
   it('is idempotent when a batch is resent', async () => {
     const { app, cookie, laptop } = await setup();
     laptop.write('page', 'p1', 'title', 'once');
@@ -220,6 +238,19 @@ describe('two devices', () => {
     await phone.sync(app, cookie);
     expect(phone.get('page', 'p1', 'title')).toBe('from laptop, later');
     expect(phone.conflicts()).toEqual([]);
+  });
+
+  it('replayed values (after a server restore) never create conflicts', async () => {
+    const { app, cookie, laptop, phone, wall, sync } = await setup();
+    laptop.write('page', 'p1', 'title', 'a');
+    await laptop.sync(app, cookie);
+    wall.ms += 1000;
+    phone.write('page', 'p1', 'title', 'b');
+    const replay = { ...phone.outbox[0]!, opId: 'replay1', prevHlc: null, replay: true };
+    sync.push([replay]);
+    await laptop.sync(app, cookie);
+    expect(laptop.get('page', 'p1', 'title')).toBe('b');
+    expect(laptop.conflicts()).toEqual([]);
   });
 
   it('a conflict can be resolved from either device', async () => {

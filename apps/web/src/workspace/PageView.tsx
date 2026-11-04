@@ -111,30 +111,58 @@ function TitleInput({ page, readOnly }: { page: Page; readOnly: boolean }) {
   const store = useStore();
   const [value, setValue] = useState(page.title);
   const focused = useRef(false);
+  /** The user typed since focusing. Until then, remote changes may replace the text. */
+  const dirty = useRef(false);
+  /**
+   * HLC of the title the user started editing from. Sent as prevHlc so concurrent edits are detected.
+   * undefined until loaded: the store then uses the stored HLC.
+   */
+  const base = useRef<string | null | undefined>(undefined);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef(page.title);
   const pending = useRef<string | null>(null);
 
+  const loadBase = () =>
+    void store.db.page.get(page.id).then((rec) => {
+      base.current = rec?._hlc.title ?? null;
+    });
+
   // Show changes from other devices unless the user is typing here.
   useEffect(() => {
-    if (!focused.current) setValue(page.title);
     latest.current = page.title;
+    if (!dirty.current) {
+      setValue(page.title);
+      loadBase();
+    }
+    // loadBase only reads refs and props, so page.title is the only dependency.
   }, [page.title]);
+
+  const save = (next: string) => {
+    pending.current = null;
+    if (next === latest.current) {
+      dirty.current = false;
+      return;
+    }
+    void renamePage(store, page.id, next, base.current).then((hlc) => {
+      base.current = hlc; // the next edit continues from our own write
+      if (!focused.current) dirty.current = false;
+    });
+  };
 
   const flush = (next: string) => {
     if (timer.current) clearTimeout(timer.current);
     timer.current = null;
-    pending.current = null;
-    if (next !== latest.current) void renamePage(store, page.id, next);
+    if (dirty.current) save(next);
   };
 
   // Leaving the page while a save is waiting: save now, so no typed text is lost.
   useEffect(
     () => () => {
       if (timer.current) clearTimeout(timer.current);
-      if (pending.current !== null && pending.current !== latest.current) void renamePage(store, page.id, pending.current);
+      if (pending.current !== null) save(pending.current);
     },
-    [store, page.id],
+    // Runs on unmount only. The component remounts per page (key = page id).
+    [],
   );
 
   return (
@@ -150,9 +178,11 @@ function TitleInput({ page, readOnly }: { page: Page; readOnly: boolean }) {
       onBlur={() => {
         focused.current = false;
         flush(value);
+        if (!pending.current && value === latest.current) dirty.current = false;
       }}
       onChange={(e) => {
         const next = e.target.value;
+        dirty.current = true;
         setValue(next);
         pending.current = next;
         if (timer.current) clearTimeout(timer.current);

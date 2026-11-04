@@ -117,7 +117,12 @@ export function createApp(deps: AppDeps): Hono {
     if (!parsed.success) return c.json({ error: 'invalid_request' }, 400);
     const result = sync.push(parsed.data.ops);
     if (result.rejected.length) console.warn('[sync] rejected ops', result.rejected);
-    return c.json<PushResponse>({ ok: true, lastSeq: result.lastSeq, rejected: result.rejected.map((r) => r.opId) });
+    return c.json<PushResponse>({
+      ok: true,
+      lastSeq: result.lastSeq,
+      rejected: result.rejected.map((r) => r.opId),
+      serverTime: Date.now(),
+    });
   });
 
   app.get('/api/sync/pull', (c) => {

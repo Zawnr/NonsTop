@@ -3,21 +3,34 @@ import { randomUUID } from 'node:crypto';
 import { and, asc, eq, gt, max } from 'drizzle-orm';
 import {
   checkClientOp,
-  entities,
   HlcClock,
+  isClientCreatable,
   isConflictField,
   mergeField,
   parseHlc,
   type Change,
-  type EntityDef,
   type FieldOp,
   type LostVersion,
   type PullResponse,
 } from '@nonstop/shared';
 import type { Db } from './db/client.ts';
-import { changes, fieldState } from './db/schema.ts';
+import { changes, fieldState, serverMeta } from './db/schema.ts';
 
 export const PULL_LIMIT = 1000;
+/** Writes stamped further ahead than this are refused: the device clock is badly wrong. */
+export const MAX_CLOCK_AHEAD_MS = 24 * 60 * 60 * 1000;
+const EPOCH_KEY = 'epoch';
+
+/** Gives the database a new epoch. Called after a restore so devices know to resync fully. */
+export function resetEpoch(db: Db): string {
+  const epoch = randomUUID();
+  db.insert(serverMeta).values({ key: EPOCH_KEY, value: epoch }).onConflictDoUpdate({ target: serverMeta.key, set: { value: epoch } }).run();
+  return epoch;
+}
+
+function loadEpoch(db: Db): string {
+  return db.select().from(serverMeta).where(eq(serverMeta.key, EPOCH_KEY)).get()?.value ?? resetEpoch(db);
+}
 
 export interface PushResult {
   lastSeq: number;
@@ -25,20 +38,16 @@ export interface PushResult {
   rejected: { opId: string; reason: string }[];
 }
 
-/** Entities that clients may only modify, never create (all their fields are not client-writable). */
-function serverOwned(entity: string): boolean {
-  const def = (entities as Record<string, EntityDef>)[entity];
-  return def !== undefined && def.clientFields.length < Object.keys(def.fields).length;
-}
-
 export class SyncService {
   private readonly clock: HlcClock;
+  readonly epoch: string;
 
   constructor(
     private readonly db: Db,
     private readonly now: () => number = Date.now,
   ) {
     this.clock = new HlcClock('server', now);
+    this.epoch = loadEpoch(db);
   }
 
   push(ops: FieldOp[]): PushResult {
@@ -51,8 +60,12 @@ export class SyncService {
           rejected.push({ opId: op.opId, reason: check.reason });
           continue;
         }
+        if ((parseHlc(op.hlc)?.ms ?? 0) > this.now() + MAX_CLOCK_AHEAD_MS) {
+          rejected.push({ opId: op.opId, reason: 'hlc too far in the future (device clock wrong)' });
+          continue;
+        }
         if (tx.select({ seq: changes.seq }).from(changes).where(eq(changes.opId, op.opId)).get()) continue; // resent
-        if (serverOwned(op.entity) && !this.exists(tx, op.entity, op.id)) {
+        if (!isClientCreatable(op.entity) && !this.exists(tx, op.entity, op.id)) {
           rejected.push({ opId: op.opId, reason: `${op.entity} ${op.id} does not exist` });
           continue;
         }
@@ -60,7 +73,7 @@ export class SyncService {
         const current = this.field(tx, op.entity, op.id, op.field);
         const result = mergeField(current, op);
         this.record(tx, { ...op, applied: result.apply });
-        if (result.lost && isConflictField(op.entity, op.field)) this.addConflict(tx, op, result.lost);
+        if (result.lost && !op.replay && isConflictField(op.entity, op.field)) this.addConflict(tx, op, result.lost);
       }
     });
     return { lastSeq: this.lastSeq(), rejected };
@@ -83,7 +96,13 @@ export class SyncService {
       value: JSON.parse(r.value) as unknown,
       hlc: r.hlc,
     }));
-    return { changes: out, lastSeq: page.at(-1)?.seq ?? since, more: rows.length > limit };
+    return {
+      changes: out,
+      lastSeq: page.at(-1)?.seq ?? since,
+      more: rows.length > limit,
+      epoch: this.epoch,
+      serverTime: this.now(),
+    };
   }
 
   lastSeq(): number {
@@ -107,7 +126,10 @@ export class SyncService {
       .get();
   }
 
-  private record(tx: Tx, w: { opId: string; entity: string; id: string; field: string; value: unknown; hlc: string; applied: boolean }) {
+  private record(
+    tx: Tx,
+    w: { opId: string; entity: string; id: string; field: string; value: unknown; hlc: string; applied: boolean },
+  ) {
     const value = JSON.stringify(w.value);
     tx.insert(changes)
       .values({

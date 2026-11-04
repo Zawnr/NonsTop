@@ -17,6 +17,7 @@ export function Workspace({ onLogout }: { onLogout: () => void }) {
   const store = useStore();
 
   if (!index) return null;
+  const trashCount = trashRoots(index).length;
   const currentId = route.name === 'page' ? route.id : null;
   const closeNav = () => setNavOpen(false);
 
@@ -41,7 +42,7 @@ export function Workspace({ onLogout }: { onLogout: () => void }) {
         <h2 className="section-title">Halaman</h2>
         <PageTree index={index} currentId={currentId} onNavigate={closeNav} />
         <div className="sidebar-foot">
-          <SideLink path="/trash" label={`Trash${trashRoots(index).length ? ` (${trashRoots(index).length})` : ''}`} onNavigate={closeNav} />
+          <SideLink path="/trash" label={`Trash${trashCount ? ` (${trashCount})` : ''}`} onNavigate={closeNav} />
           <SideLink path="/settings" label="Pengaturan" onNavigate={closeNav} />
         </div>
       </aside>

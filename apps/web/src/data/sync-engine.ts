@@ -121,17 +121,32 @@ export class SyncEngine {
     for (;;) {
       const batch = await outbox.orderBy('seq').limit(PUSH_BATCH).toArray();
       if (!batch.length) return;
-      const res = await this.transport.push(batch.map((e) => e.op));
-      if (res.rejected.length) console.warn('[sync] server rejected ops', res.rejected);
+      const groups = coalesce(batch.map((e) => e.op));
+      const sentAt = this.store.localTime();
+      const res = await this.transport.push(groups.map((g) => g.op));
+      await this.store.setServerTime(res.serverTime, sentAt, this.store.localTime());
       // Only the entries that were sent are removed. Writes made during the request stay queued.
       await outbox.bulkDelete(batch.map((e) => e.seq!));
+      if (res.rejected.length) {
+        console.warn('[sync] server rejected ops', res.rejected);
+        const rejected = new Set(res.rejected);
+        await this.store.revertRejected(groups.filter((g) => rejected.has(g.op.opId)).flatMap((g) => g.sources));
+      }
     }
   }
 
   private async pullAll() {
     let since = await this.store.cursor();
     for (;;) {
+      const sentAt = this.store.localTime();
       const res = await this.transport.pull(since);
+      await this.store.setServerTime(res.serverTime, sentAt, this.store.localTime());
+      if (await this.store.checkEpoch(res.epoch)) {
+        // The server was restored from a backup: send everything back, then pull from the start.
+        await this.pushAll();
+        since = 0;
+        continue;
+      }
       await this.store.applyRemote(res.changes, res.lastSeq);
       since = res.lastSeq;
       if (!res.more) return;
@@ -147,4 +162,30 @@ export class SyncEngine {
     this.status = next;
     this.listeners.forEach((l) => l());
   }
+}
+
+interface OpGroup {
+  op: FieldOp;
+  sources: FieldOp[];
+}
+
+/**
+ * Folds queued writes to the same field into one: the last value, with the prevHlc of the first.
+ * Text typed offline then reaches the server as one edit, so a lost race never shows half-typed
+ * intermediate titles as "other versions".
+ */
+export function coalesce(ops: FieldOp[]): OpGroup[] {
+  const groups = new Map<string, OpGroup>();
+  for (const op of ops) {
+    const key = `${op.entity}/${op.id}/${op.field}`;
+    const group = groups.get(key);
+    if (!group) {
+      groups.set(key, { op, sources: [op] });
+      continue;
+    }
+    group.sources.push(op);
+    const replay = group.sources.every((o) => o.replay) ? true : undefined;
+    group.op = { ...op, prevHlc: group.sources[0]!.prevHlc, replay };
+  }
+  return [...groups.values()];
 }

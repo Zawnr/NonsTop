@@ -25,6 +25,8 @@ export interface EntityDef {
   conflictFields: readonly string[];
   /** Fields a client may write. Others are written only by the server. */
   clientFields: readonly string[];
+  /** Clients may create new records. If false, clients can only modify records the server created. */
+  clientCreatable: boolean;
 }
 
 const pageFields = {
@@ -58,11 +60,13 @@ export const entities = {
     fields: pageFields,
     conflictFields: ['title'],
     clientFields: Object.keys(pageFields),
+    clientCreatable: true,
   },
   conflict: {
     fields: conflictFields,
     conflictFields: [],
     clientFields: ['resolved'],
+    clientCreatable: false,
   },
 } satisfies Record<string, EntityDef>;
 
@@ -102,6 +106,11 @@ export const fieldOp = z.object({
   value: z.unknown(),
   hlc,
   prevHlc: hlc.nullable(),
+  /**
+   * Re-send of a value the device already had, after the server lost data (restore from backup).
+   * Merged with last-writer-wins but never creates a conflict record.
+   */
+  replay: z.boolean().optional(),
 });
 export type FieldOp = z.infer<typeof fieldOp>;
 
@@ -115,8 +124,10 @@ export type PushRequest = z.infer<typeof pushRequest>;
 export interface PushResponse {
   ok: true;
   lastSeq: number;
-  /** opIds the server refused (invalid field or value). The client drops them from its queue. */
+  /** opIds the server refused (invalid field or value). The client drops them and restores the server value. */
   rejected: string[];
+  /** Server clock (ms). Clients correct their HLC wall clock with it. */
+  serverTime: number;
 }
 
 export interface Change {
@@ -133,6 +144,10 @@ export interface PullResponse {
   lastSeq: number;
   /** More changes are waiting. Pull again with `since = lastSeq`. */
   more: boolean;
+  /** Changes when the server database is replaced (restore from backup). Clients then resync fully. */
+  epoch: string;
+  /** Server clock (ms). Clients correct their HLC wall clock with it. */
+  serverTime: number;
 }
 
 export type OpCheck = { ok: true } | { ok: false; reason: string };
@@ -149,6 +164,10 @@ export function checkClientOp(op: FieldOp): OpCheck {
     return { ok: false, reason: `invalid value for ${op.entity}.${op.field}` };
   }
   return { ok: true };
+}
+
+export function isClientCreatable(entity: string): boolean {
+  return (entities as Record<string, EntityDef>)[entity]?.clientCreatable ?? false;
 }
 
 export function isConflictField(entity: string, field: string): boolean {
