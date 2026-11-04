@@ -1,0 +1,59 @@
+// Sprint 0 home: proves login, install and push work. The workspace UI replaces it in sprint 1.
+import { useState } from 'react';
+import { api } from '../api.ts';
+import { enablePush, pushSupport } from '../push.ts';
+
+export function Home({ onLogout }: { onLogout: () => void }) {
+  const [status, setStatus] = useState<string | null>(null);
+  const support = pushSupport();
+
+  async function run(task: () => Promise<string>) {
+    setStatus('…');
+    try {
+      setStatus(await task());
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : 'Gagal.');
+    }
+  }
+
+  return (
+    <main className="page">
+      <header className="topbar">
+        <strong>NonsTop</strong>
+        <button className="ghost" onClick={() => api.logout().finally(onLogout)}>
+          Keluar
+        </button>
+      </header>
+
+      <section className="card">
+        <h2>Fondasi siap</h2>
+        <p>Login berhasil. Halaman, editor, dan database menyusul di sprint berikutnya.</p>
+      </section>
+
+      <section className="card">
+        <h2>Notifikasi</h2>
+        {support === 'insecure' && <p>Notifikasi butuh HTTPS. Buka NonsTop lewat alamat Tailscale.</p>}
+        {support === 'unsupported' && <p>Browser ini tidak mendukung push notification.</p>}
+        {support === 'supported' && (
+          <div className="row">
+            <button onClick={() => run(async () => (await enablePush(), 'Notifikasi aktif di perangkat ini.'))}>
+              Aktifkan notifikasi
+            </button>
+            <button
+              className="ghost"
+              onClick={() =>
+                run(async () => {
+                  const r = await api.pushTest();
+                  return `Terkirim ke ${r.sent} perangkat${r.failed ? `, gagal ${r.failed}` : ''}.`;
+                })
+              }
+            >
+              Kirim tes
+            </button>
+          </div>
+        )}
+        {status && <p className="status">{status}</p>}
+      </section>
+    </main>
+  );
+}
