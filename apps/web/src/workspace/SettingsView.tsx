@@ -1,9 +1,9 @@
-// Sprint 0 home: proves login, install and push work. The workspace UI replaces it in sprint 1.
+// Settings: push notifications for this device, and sign out.
 import { useState } from 'react';
 import { api } from '../api.ts';
 import { enablePush, pushSupport } from '../push.ts';
 
-export function Home({ onLogout }: { onLogout: () => void }) {
+export function SettingsView({ onLogout }: { onLogout: () => void }) {
   const [status, setStatus] = useState<string | null>(null);
   const support = pushSupport();
 
@@ -17,18 +17,8 @@ export function Home({ onLogout }: { onLogout: () => void }) {
   }
 
   return (
-    <main className="page">
-      <header className="topbar">
-        <strong>NonsTop</strong>
-        <button className="ghost" onClick={() => api.logout().finally(onLogout)}>
-          Keluar
-        </button>
-      </header>
-
-      <section className="card">
-        <h2>Fondasi siap</h2>
-        <p>Login berhasil. Halaman, editor, dan database menyusul di sprint berikutnya.</p>
-      </section>
+    <article className="page-view">
+      <h1>Pengaturan</h1>
 
       <section className="card">
         <h2>Notifikasi</h2>
@@ -54,6 +44,14 @@ export function Home({ onLogout }: { onLogout: () => void }) {
         )}
         {status && <p className="status">{status}</p>}
       </section>
-    </main>
+
+      <section className="card">
+        <h2>Akun</h2>
+        <p className="muted">Data di perangkat ini tetap tersimpan setelah keluar, dan tersinkron lagi saat login.</p>
+        <button className="ghost" onClick={() => api.logout().finally(onLogout)}>
+          Keluar
+        </button>
+      </section>
+    </article>
   );
 }

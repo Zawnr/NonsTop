@@ -1,5 +1,13 @@
 // Thin fetch wrapper for the NonsTop server API.
-import type { PushPublicKey, PushSubscriptionRequest, PushTestResult, SessionInfo } from '@nonstop/shared';
+import type {
+  FieldOp,
+  PullResponse,
+  PushPublicKey,
+  PushResponse,
+  PushSubscriptionRequest,
+  PushTestResult,
+  SessionInfo,
+} from '@nonstop/shared';
 
 export class ApiError extends Error {
   constructor(
@@ -29,4 +37,11 @@ export const api = {
   pushPublicKey: () => request<PushPublicKey>('GET', '/api/push/public-key'),
   pushSubscribe: (sub: PushSubscriptionRequest) => request<{ ok: true }>('POST', '/api/push/subscribe', sub),
   pushTest: () => request<PushTestResult>('POST', '/api/push/test', {}),
+  syncPush: (ops: FieldOp[]) => request<PushResponse>('POST', '/api/sync/push', { ops }),
+  syncPull: (since: number) => request<PullResponse>('GET', `/api/sync/pull?since=${since}`),
 };
+
+/** No connection: fetch failed, or the Tailscale proxy answered because the NonsTop server is down. */
+export function isOfflineError(err: unknown): boolean {
+  return err instanceof TypeError || (err instanceof ApiError && [502, 503, 504].includes(err.status));
+}

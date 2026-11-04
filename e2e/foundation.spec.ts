@@ -10,12 +10,14 @@ test('login: wrong password shows an error, right password opens the app', async
 
   await page.getByLabel('Password').fill(PASSWORD);
   await page.getByRole('button', { name: 'Masuk' }).click();
-  await expect(page.getByRole('heading', { name: 'Fondasi siap' })).toBeVisible();
+  const workspace = page.getByRole('main').getByRole('button', { name: '+ Halaman baru' });
+  await expect(workspace).toBeVisible();
 
   // Session survives a reload.
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Fondasi siap' })).toBeVisible();
+  await expect(workspace).toBeVisible();
 
+  await page.goto('/settings');
   await page.getByRole('button', { name: 'Keluar' }).click();
   await expect(page.getByLabel('Password')).toBeVisible();
 });
