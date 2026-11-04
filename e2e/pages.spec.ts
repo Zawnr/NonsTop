@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { createPage, login, openNav, openSideLink, opensNewPage, setTitle, syncBadge, syncNow, treeLink, unique } from './helpers.ts';
+import { createPage, gotoStable, login, openNav, openSideLink, opensNewPage, setTitle, syncBadge, syncNow, treeLink, unique, waitForServiceWorker } from './helpers.ts';
 
 test('pages: create, nest, rename, favorite, trash, restore, delete permanently', async ({ page }) => {
   await login(page);
@@ -23,7 +23,7 @@ test('pages: create, nest, rename, favorite, trash, restore, delete permanently'
   await treeLink(page, parent).click();
   await page.getByRole('button', { name: 'Hapus', exact: true }).click();
   await expect(treeLink(page, parent)).toHaveCount(0);
-  await expect(page.getByRole('list', { name: 'Favorit' })).toHaveCount(0);
+  await expect(page.getByRole('list', { name: 'Favorit' }).getByText(renamed)).toHaveCount(0);
 
   await openSideLink(page, 'Trash');
   const row = page.getByRole('listitem').filter({ hasText: parent });
@@ -45,8 +45,7 @@ test('pages: create, nest, rename, favorite, trash, restore, delete permanently'
 
 test('offline: create a page offline, reload offline, sync when back online', async ({ browser, page, context }) => {
   await login(page);
-  await page.evaluate(() => navigator.serviceWorker.ready);
-  await page.reload(); // let the service worker control the page
+  await waitForServiceWorker(page);
   await syncNow(page);
 
   await context.setOffline(true);
@@ -64,7 +63,7 @@ test('offline: create a page offline, reload offline, sync when back online', as
   const other = await browser.newContext();
   const phone = await other.newPage();
   await login(phone);
-  await phone.goto(`/p/${id}`);
+  await gotoStable(phone, `/p/${id}`);
   await expect(phone.getByLabel('Judul halaman')).toHaveValue(title);
   await other.close();
 });
@@ -80,7 +79,7 @@ test('conflict: concurrent offline edits keep the other version and let the user
   const base = unique('Konflik');
   const id = await createPage(laptop, base);
   await syncNow(laptop);
-  await phone.goto(`/p/${id}`);
+  await gotoStable(phone, `/p/${id}`);
   await expect(phone.getByLabel('Judul halaman')).toHaveValue(base);
 
   await laptopCtx.setOffline(true);

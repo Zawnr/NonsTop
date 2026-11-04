@@ -1,11 +1,12 @@
 // App layout: sidebar (fixed on wide screens, drawer on phones) and the current view.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createPage } from '../data/pages.ts';
 import { usePageIndex, useStore } from '../data/workspace.tsx';
 import { favorites, trashRoots, UNTITLED, type PageIndex } from '../model/pages.ts';
 import { navigate, pagePath, useRoute } from '../router.ts';
 import { PageTree } from './PageTree.tsx';
 import { PageView } from './PageView.tsx';
+import { SearchDialog } from './SearchDialog.tsx';
 import { SettingsView } from './SettingsView.tsx';
 import { SyncBadge } from './SyncBadge.tsx';
 import { TrashView } from './TrashView.tsx';
@@ -14,7 +15,19 @@ export function Workspace({ onLogout }: { onLogout: () => void }) {
   const index = usePageIndex();
   const route = useRoute();
   const [navOpen, setNavOpen] = useState(false);
+  const [searching, setSearching] = useState(false);
   const store = useStore();
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setSearching(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   if (!index) return null;
   const trashCount = trashRoots(index).length;
@@ -35,6 +48,9 @@ export function Workspace({ onLogout }: { onLogout: () => void }) {
           </a>
           <SyncBadge />
         </div>
+        <button className="ghost search-open" onClick={() => (setSearching(true), closeNav())}>
+          Cari…
+        </button>
         <button className="new-page" onClick={() => void newPage()}>
           + Halaman baru
         </button>
@@ -56,6 +72,7 @@ export function Workspace({ onLogout }: { onLogout: () => void }) {
         </header>
         <View index={index} onLogout={onLogout} onNewPage={() => void newPage()} />
       </main>
+      {searching && <SearchDialog index={index} onClose={() => setSearching(false)} />}
     </div>
   );
 }

@@ -177,3 +177,25 @@ button.danger { color: var(--error); }
   .page-view { padding: 1.25rem 1rem 3rem; }
   .title-input { font-size: 1.625rem; }
 }
+
+/* Editor (BlockNote) */
+.editor { margin: 0 -1.5rem; min-height: 8rem; }
+.editor .bn-container { --bn-colors-editor-background: transparent; font-family: inherit; }
+.editor .bn-editor { padding-inline: 3rem 1.5rem; }
+.callout { display: flex; gap: 0.5rem; align-items: flex-start; width: 100%; padding: 0.5rem 0.75rem; border-radius: 8px; background: var(--hover); }
+.callout-icon { min-height: 28px; min-width: 28px; padding: 0; border: none; background: transparent; font-size: 1.125rem; line-height: 1.5; cursor: pointer; }
+.callout-text { flex: 1; min-width: 0; }
+
+/* Search */
+.search-open { margin: 0 0.25rem; justify-content: flex-start; color: var(--muted); }
+.search-input { width: 100%; font-size: 1rem; }
+.search-results { list-style: none; margin: 0.75rem 0 0; padding: 0; max-height: 60dvh; overflow-y: auto; display: grid; gap: 0.25rem; }
+.search-results button { width: 100%; text-align: left; border: none; min-height: 44px; padding: 0.5rem 0.75rem; display: grid; gap: 0.125rem; }
+.search-results button:hover, .search-results button[aria-selected='true'] { background: var(--hover); }
+.search-results .snippet { font-size: 0.8125rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.search-results mark { background: #fde68a; color: inherit; border-radius: 2px; }
+
+@media (max-width: 767px) {
+  .editor { margin: 0 -1rem; }
+  .editor .bn-editor { padding-inline: 2.25rem 0.75rem; }
+}
