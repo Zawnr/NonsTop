@@ -28,7 +28,18 @@ test('PWA: valid manifest and an active service worker', async ({ page, request 
   );
 
   await page.goto('/');
-  const state = await page.evaluate(async () => (await navigator.serviceWorker.ready).active?.state);
+  // `ready` resolves once a worker is active, which may still be in the "activating" state.
+  const state = await page.evaluate(async () => {
+    const worker = (await navigator.serviceWorker.ready).active!;
+    if (worker.state !== 'activated') {
+      await new Promise<void>((resolve) => {
+        worker.addEventListener('statechange', () => {
+          if (worker.state === 'activated') resolve();
+        });
+      });
+    }
+    return worker.state;
+  });
   expect(state).toBe('activated');
 });
 
