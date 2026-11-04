@@ -158,7 +158,8 @@ export class SyncService {
       entity: op.entity,
       entityId: op.id,
       field: op.field,
-      pageId: op.id, // pages only for now; blocks and property values will point to their page
+      // The page the marker shows on: the page itself, or the page a block belongs to.
+      pageId: op.entity === 'page' ? op.id : String(this.field(tx, op.entity, op.id, 'pageId')?.value ?? op.id),
       value: lost.value,
       hlc: lost.hlc,
       deviceId: lost.deviceId,

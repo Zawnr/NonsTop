@@ -253,6 +253,25 @@ describe('two devices', () => {
     expect(laptop.conflicts()).toEqual([]);
   });
 
+  it('concurrent edits of one block keep the other version, marked on the block\'s page', async () => {
+    const { app, cookie, laptop, phone, wall } = await setup();
+    const content = (text: string) => [{ type: 'text', text, styles: {} }];
+    laptop.write('block', 'b1', 'pageId', 'p1');
+    laptop.write('block', 'b1', 'content', content('awal'));
+    await laptop.sync(app, cookie);
+    await phone.sync(app, cookie);
+    wall.ms += 1000;
+    laptop.write('block', 'b1', 'content', content('laptop'));
+    wall.ms += 1000;
+    phone.write('block', 'b1', 'content', content('HP'));
+    await phone.sync(app, cookie);
+    await laptop.sync(app, cookie);
+    expect(laptop.get('block', 'b1', 'content')).toEqual(content('HP'));
+    const [conflict] = laptop.conflicts();
+    expect(conflict).toMatchObject({ field: 'content', value: content('laptop') });
+    expect(laptop.get('conflict', conflict!.id, 'pageId')).toBe('p1');
+  });
+
   it('a conflict can be resolved from either device', async () => {
     const { app, cookie, laptop, phone, wall } = await setup();
     laptop.write('page', 'p1', 'title', 'a');
