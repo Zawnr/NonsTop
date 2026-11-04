@@ -6,6 +6,7 @@ import { LoginLimiter, SessionStore } from '../src/auth.ts';
 import { openDatabase } from '../src/db/client.ts';
 import { PushService } from '../src/push.ts';
 import { createApp } from '../src/app.ts';
+import { SyncService } from '../src/sync.ts';
 import { testConfig } from './helpers.ts';
 
 const dist = fs.mkdtempSync(path.join(os.tmpdir(), 'nonstop-dist-'));
@@ -19,6 +20,7 @@ const app = createApp({
   sessions: new SessionStore(db, 30),
   limiter: new LoginLimiter(),
   push: new PushService(db, config, async () => undefined),
+  sync: new SyncService(db),
   serveWeb: true,
 });
 

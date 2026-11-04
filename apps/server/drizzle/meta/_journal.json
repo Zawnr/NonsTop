@@ -8,6 +8,20 @@
       "when": 1793750707685,
       "tag": "0000_init_infra",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1793796935945,
+      "tag": "0001_sync_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1793798358765,
+      "tag": "0002_server_meta",
+      "breakpoints": true
     }
   ]
 }

@@ -7,6 +7,7 @@ import { loadConfig, repoRoot, ConfigError } from './config.ts';
 import { openDatabase } from './db/client.ts';
 import { LoginLimiter, SessionStore } from './auth.ts';
 import { PushService } from './push.ts';
+import { SyncService } from './sync.ts';
 import { createApp } from './app.ts';
 import { isServerRunning, PID_FILE, scheduleDailyBackup } from './backup.ts';
 
@@ -39,6 +40,7 @@ const app = createApp({
   sessions,
   limiter: new LoginLimiter(),
   push: new PushService(db, config),
+  sync: new SyncService(db),
   serveWeb: production,
 });
 

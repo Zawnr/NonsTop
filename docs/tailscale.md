@@ -14,6 +14,11 @@ HTTPS wajib, karena Android hanya mengizinkan install PWA dan push notification 
    ```
    Buka link yang muncul, lalu login.
 4. Di HP Android: install app **Tailscale** dari Play Store, login dengan akun yang sama, lalu nyalakan.
+5. Di folder NonsTop, buat `.env` (password login dan kunci VAPID untuk push):
+   ```bash
+   pnpm configure
+   ```
+   Tanpa langkah ini `pnpm start` berhenti dengan pesan `Missing NONSTOP_PASSWORD_HASH ...`.
 
 ## Tiap kali NonsTop dijalankan
 

@@ -6,9 +6,9 @@ dist/
 dev-dist/
 *.tsbuildinfo
 
-# runtime data (never commit personal data)
-data/
-backups/
+# runtime data at the repo root (never commit personal data)
+/data/
+/backups/
 
 # secrets
 .env

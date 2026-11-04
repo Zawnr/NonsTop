@@ -161,6 +161,11 @@ sequenceDiagram
 - Push dan pull jalan saat app dibuka, saat koneksi kembali, dan tiap beberapa detik saat online.
 - Tidak ada data hilang diam-diam (F-63): nilai yang kalah tetap tersimpan, dan halaman yang punya nilai kalah diberi penanda "ada versi lain". User bisa melihat dan memulihkannya.
 
+### Catatan implementasi (sprint 1)
+- Server menyimpan konten per field di satu tabel umum `field_state` (entity, entity_id, field, value, hlc), bukan tabel per entity dengan kolom HLC per field. Model logis ERD tetap berlaku. Entity baru (blok, properti, view) tidak butuh migrasi, cukup didaftarkan di `packages/shared/src/sync.ts`.
+- Edit konkuren dideteksi lewat `prevHlc` (versi yang terakhir dilihat perangkat). Nilai yang kalah disimpan sebagai entity `conflict` yang ikut tersinkron, lalu tampil sebagai penanda "Ada versi lain". Untuk sekarang hanya judul halaman yang memunculkan penanda. Field struktur (urutan, parent) tidak.
+- Siklus parent dari pemindahan konkuren diputus saat render: halaman ber-id terkecil di siklus dianggap tingkat atas, sama di semua perangkat.
+
 ### Alur utama
 - **Catatan cepat (F-50):** shortcut PWA "Catatan baru" di launcher Android membuka halaman baru di Inbox dengan kursor siap mengetik.
 - **Pengingat (F-52):** properti date bisa diberi jam pengingat. Scheduler server mengecek tiap menit, mengirim web-push ke semua perangkat terdaftar, dan mencatat yang sudah terkirim agar tidak dobel.

@@ -3,6 +3,7 @@ import { hashPassword, LoginLimiter, SessionStore } from '../src/auth.ts';
 import { openDatabase } from '../src/db/client.ts';
 import { PushService, type PushSender } from '../src/push.ts';
 import { createApp } from '../src/app.ts';
+import { SyncService } from '../src/sync.ts';
 
 export const PASSWORD = 'correct horse battery';
 const passwordHash = hashPassword(PASSWORD);
@@ -30,13 +31,15 @@ export function makeApp(opts: { sender?: PushSender; limiter?: LoginLimiter; now
   const handle = openDatabase(':memory:');
   const config = testConfig();
   const push = new PushService(handle.db, config, opts.sender ?? (async () => undefined));
+  const sync = new SyncService(handle.db, opts.now);
   const app = createApp({
     config,
     sessions: new SessionStore(handle.db, config.sessionDays, opts.now),
     limiter: opts.limiter ?? new LoginLimiter(),
     push,
+    sync,
   });
-  return { app, push, handle };
+  return { app, push, sync, handle };
 }
 
 const ORIGIN = 'http://localhost';

@@ -1,7 +1,8 @@
-// SQLite schema (Drizzle). Sprint 0 holds only infrastructure tables.
-// Content tables (page, block, database, property, view, change) arrive in sprint 1
-// together with the sync engine, because their per-field HLC columns are designed there.
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
+// SQLite schema (Drizzle).
+// Content (pages now; blocks, databases, properties and views later) is stored per field in
+// `field_state`, each field with its own HLC. That is what last-writer-wins per field needs (F-63),
+// and new entity types need no migration. Valid entities and fields are defined in @nonstop/shared.
+import { sqliteTable, text, integer, primaryKey, index } from 'drizzle-orm/sqlite-core';
 
 /** Login sessions. `id` is the SHA-256 of the cookie token, so a leaked DB cannot be replayed. */
 export const sessions = sqliteTable('sessions', {
@@ -18,4 +19,44 @@ export const pushSubscriptions = sqliteTable('push_subscriptions', {
   auth: text('auth').notNull(),
   deviceLabel: text('device_label'),
   createdAt: integer('created_at').notNull(),
+});
+
+/** Current value of every field: the winner of last-writer-wins. `value` is JSON. */
+export const fieldState = sqliteTable(
+  'field_state',
+  {
+    entity: text('entity').notNull(),
+    entityId: text('entity_id').notNull(),
+    field: text('field').notNull(),
+    value: text('value').notNull(),
+    hlc: text('hlc').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.entity, t.entityId, t.field] })],
+);
+
+/**
+ * Log of every write the server received, in arrival order. `seq` is the pull cursor.
+ * Losing writes are kept with applied = 0, so no edit is ever thrown away.
+ */
+export const changes = sqliteTable(
+  'changes',
+  {
+    seq: integer('seq').primaryKey({ autoIncrement: true }),
+    opId: text('op_id').notNull().unique(),
+    entity: text('entity').notNull(),
+    entityId: text('entity_id').notNull(),
+    field: text('field').notNull(),
+    value: text('value').notNull(),
+    hlc: text('hlc').notNull(),
+    deviceId: text('device_id').notNull(),
+    applied: integer('applied', { mode: 'boolean' }).notNull(),
+    receivedAt: integer('received_at').notNull(),
+  },
+  (t) => [index('changes_applied_seq').on(t.applied, t.seq)],
+);
+
+/** Server-wide settings. `epoch` identifies this copy of the database (new value after a restore). */
+export const serverMeta = sqliteTable('server_meta', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
 });
