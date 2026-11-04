@@ -1,0 +1,29 @@
+{
+  "name": "nonstop",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.4.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "configure": "pnpm --filter @nonstop/server configure",
+    "dev": "pnpm --parallel --filter @nonstop/server --filter @nonstop/web dev",
+    "build": "pnpm --filter @nonstop/web build",
+    "start": "pnpm build && pnpm --filter @nonstop/server start",
+    "backup": "pnpm --filter @nonstop/server backup",
+    "restore": "pnpm --filter @nonstop/server restore",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint .",
+    "e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.64.1",
+    "eslint": "^10.14.0",
+    "globals": "^17.14.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.72.1"
+  }
+}
