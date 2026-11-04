@@ -51,7 +51,11 @@ export async function restorePage(store: LocalStore, index: PageIndex, id: strin
 export async function deletePermanently(store: LocalStore, index: PageIndex, id: string): Promise<void> {
   if (!index.isTrashed(id)) throw new Error('Only pages in the trash can be deleted permanently.');
   const ids = [id, ...index.descendants(id).map((p) => p.id)];
-  await store.writeMany(ids.map((pid) => ({ entity: 'page', id: pid, fields: { deleted: true } })));
+  const blocks = await store.db.block.where('pageId').anyOf(ids).primaryKeys();
+  await store.writeMany([
+    ...ids.map((pid) => ({ entity: 'page', id: pid, fields: { deleted: true } })),
+    ...blocks.map((bid) => ({ entity: 'block', id: bid, fields: { deleted: true } })),
+  ]);
 }
 
 export const resolveConflict = (store: LocalStore, conflictId: string) =>

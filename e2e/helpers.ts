@@ -69,3 +69,32 @@ export async function syncBadge(page: Page) {
   const mobile = page.getByRole('main').getByTestId('sync-status');
   return (await mobile.isVisible()) ? mobile : page.getByRole('complementary').getByTestId('sync-status');
 }
+
+/**
+ * page.goto that retries once on net::ERR_NETWORK_CHANGED. Chromium raises it in every context
+ * when another test's context toggles offline in the same browser process.
+ */
+export async function gotoStable(page: Page, url: string) {
+  try {
+    await page.goto(url);
+  } catch (err) {
+    if (!String(err).includes('ERR_NETWORK_CHANGED')) throw err;
+    await page.goto(url);
+  }
+}
+
+/**
+ * Waits until the service worker is active and controls the page. A network change event from a
+ * parallel test can abort the install; the browser then installs again on the next load.
+ */
+export async function waitForServiceWorker(page: Page) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const ready = await page.evaluate(
+      () => Promise.race([navigator.serviceWorker.ready.then(() => true), new Promise<boolean>((r) => setTimeout(() => r(false), 5000))]),
+    );
+    if (ready) break;
+    await page.reload();
+  }
+  await page.reload(); // let the active service worker control the page
+  await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null)).toBe(true);
+}

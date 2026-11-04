@@ -41,6 +41,37 @@ const pageFields = {
   createdAt: timestamp,
 };
 
+/** Block types of the editor (F-03). Image and file blocks (F-05) arrive later. */
+export const blockTypes = [
+  'paragraph',
+  'heading',
+  'bulletListItem',
+  'numberedListItem',
+  'checkListItem',
+  'toggleListItem',
+  'quote',
+  'callout',
+  'codeBlock',
+  'divider',
+] as const;
+export type BlockType = (typeof blockTypes)[number];
+
+const blockFields = {
+  pageId: id,
+  /** Parent block for nesting (indent, toggle children). null = top level of the page. */
+  parentId: id.nullable(),
+  sortKey,
+  type: z.enum(blockTypes),
+  /** Block settings from the editor, for example heading level or checked state. */
+  props: z.record(z.string().max(64), z.union([z.string().max(200), z.number(), z.boolean()])).refine(
+    (p) => Object.keys(p).length <= 32,
+    'too many props',
+  ),
+  /** Inline content (rich text) as the editor stores it. Last writer wins for the whole block. */
+  content: jsonValue,
+  deleted: z.boolean(),
+};
+
 const conflictFields = {
   /** The entity and field the lost version belongs to. */
   entity: z.string().max(32),
@@ -60,6 +91,12 @@ export const entities = {
     fields: pageFields,
     conflictFields: ['title'],
     clientFields: Object.keys(pageFields),
+    clientCreatable: true,
+  },
+  block: {
+    fields: blockFields,
+    conflictFields: ['content'],
+    clientFields: Object.keys(blockFields),
     clientCreatable: true,
   },
   conflict: {
@@ -82,6 +119,17 @@ export interface Page {
   trashedAt: number | null;
   deleted: boolean;
   createdAt: number;
+}
+
+export interface Block {
+  id: string;
+  pageId: string;
+  parentId: string | null;
+  sortKey: string;
+  type: BlockType;
+  props: Record<string, string | number | boolean>;
+  content: unknown;
+  deleted: boolean;
 }
 
 export interface Conflict {

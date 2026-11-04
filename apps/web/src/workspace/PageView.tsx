@@ -1,13 +1,17 @@
 // One page: title, actions, sub-pages, and the "other version" marker for conflicts (F-63).
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import type { Conflict, Page } from '@nonstop/shared';
 import { createPage, deletePermanently, renamePage, resolveConflict, restorePage, setFavorite, trashPage } from '../data/pages.ts';
 import { usePageConflicts, useStore } from '../data/workspace.tsx';
+import { contentText } from '../model/blocks.ts';
 import { UNTITLED, visibleChildren, type PageIndex } from '../model/pages.ts';
 import { navigate, pagePath } from '../router.ts';
 import { MoveDialog } from './MoveDialog.tsx';
 
 const TITLE_SAVE_MS = 400;
+
+// The editor is the largest part of the app. Loading it separately keeps the first screen fast.
+const PageEditor = lazy(() => import('../editor/PageEditor.tsx'));
 
 export function PageView({ index, page }: { index: PageIndex; page: Page }) {
   const store = useStore();
@@ -71,7 +75,11 @@ export function PageView({ index, page }: { index: PageIndex; page: Page }) {
         </div>
       )}
 
-      <p className="muted placeholder">Editor blok hadir di sprint 2.</p>
+      <div className="editor" data-testid="editor">
+        <Suspense fallback={<p className="muted">Memuat editor…</p>}>
+          <PageEditor pageId={page.id} readOnly={trashed} />
+        </Suspense>
+      </div>
 
       {children.length > 0 && (
         <section aria-label="Sub-halaman">
@@ -197,19 +205,27 @@ function ConflictBanner({ pageId, current }: { pageId: string; current: string }
   const store = useStore();
   const conflicts = usePageConflicts(pageId);
   if (!conflicts.length) return null;
+  const isTitle = (c: Conflict) => c.entity === 'page' && c.field === 'title';
+  const preview = (c: Conflict) => (isTitle(c) ? String(c.value ?? '') : contentText(c.value)) || UNTITLED;
   const use = async (c: Conflict) => {
-    await renamePage(store, pageId, String(c.value ?? ''));
+    if (isTitle(c)) await renamePage(store, pageId, String(c.value ?? ''));
+    else await store.write('block', c.entityId, { content: c.value, deleted: false });
     await resolveConflict(store, c.id);
   };
   return (
     <div className="banner conflict" role="status" aria-label="Ada versi lain">
       <strong>Ada versi lain</strong>
-      <p className="muted">Judul ini diedit di dua perangkat saat offline. Yang terakhir dipakai: “{current || UNTITLED}”.</p>
+      <p className="muted">
+        Bagian ini diedit di dua perangkat tanpa saling melihat. Yang terakhir dipakai{conflicts.some(isTitle) ? ` (judul sekarang: “${current || UNTITLED}”)` : ''}. Versi lain:
+      </p>
       <ul>
         {conflicts.map((c) => (
           <li key={c.id}>
             <span>
-              “{String(c.value ?? '') || UNTITLED}” <span className="muted">dari perangkat {c.deviceId}, {formatTime(c.hlc)}</span>
+              <span className="muted">{isTitle(c) ? 'Judul' : 'Isi blok'}: </span>“{preview(c)}”{' '}
+              <span className="muted">
+                dari perangkat {c.deviceId.split('-')[0]}, {formatTime(c.hlc)}
+              </span>
             </span>
             <span className="row">
               <button className="ghost" onClick={() => void use(c)}>

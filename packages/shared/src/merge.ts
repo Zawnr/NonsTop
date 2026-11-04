@@ -29,8 +29,17 @@ export interface MergeResult {
   lost: LostVersion | null;
 }
 
+/** JSON with object keys sorted, so equal values compare equal whatever their key order. */
+function stableJson(value: unknown): string {
+  return JSON.stringify(value, (_key, v: unknown) =>
+    v && typeof v === 'object' && !Array.isArray(v)
+      ? Object.fromEntries(Object.entries(v as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+      : v,
+  );
+}
+
 export function sameValue(a: unknown, b: unknown): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
+  return stableJson(a) === stableJson(b);
 }
 
 function version(value: unknown, hlc: Hlc): LostVersion {

@@ -14,6 +14,11 @@ export default defineConfig({
       injectRegister: false,
       devOptions: { enabled: true, type: 'module' },
       includeAssets: ['favicon.svg', 'icons/apple-touch-icon.png'],
+      injectManifest: {
+        // BlockNote ships emoji picker data per language (~4 MB). The picker is off, so never precache it.
+        globIgnores: ['**/emoji-data-*.js', '**/{ar,de,en,es,fa,fr,he,hr,is,it,ja,ko,nb,nl,pl,pt,ru,sk,tr,uk,uz,vi,zh,zh-hant}-*-*.js'],
+        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
+      },
       manifest: {
         name: 'NonsTop',
         short_name: 'NonsTop',

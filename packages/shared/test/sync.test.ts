@@ -36,8 +36,20 @@ describe('checkClientOp', () => {
     expect(checkClientOp(op({ entity: 'conflict', field: 'value', value: 'x' })).ok).toBe(false);
   });
 
-  it('tracks conflicts on page titles only', () => {
+  it('validates block fields', () => {
+    const block = (field: string, value: unknown) => checkClientOp(op({ entity: 'block', field, value })).ok;
+    expect(block('type', 'heading')).toBe(true);
+    expect(block('type', 'image')).toBe(false);
+    expect(block('props', { level: 2, isToggleable: false })).toBe(true);
+    expect(block('props', { nested: { a: 1 } })).toBe(false);
+    expect(block('content', [{ type: 'text', text: 'hi', styles: {} }])).toBe(true);
+    expect(block('content', 'x'.repeat(100_001))).toBe(false);
+  });
+
+  it('tracks conflicts on page titles and block content only', () => {
     expect(isConflictField('page', 'title')).toBe(true);
+    expect(isConflictField('block', 'content')).toBe(true);
     expect(isConflictField('page', 'sortKey')).toBe(false);
+    expect(isConflictField('block', 'sortKey')).toBe(false);
   });
 });
