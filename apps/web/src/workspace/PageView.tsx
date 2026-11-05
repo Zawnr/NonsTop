@@ -1,11 +1,15 @@
 // One page: title, actions, sub-pages, and the "other version" marker for conflicts (F-63).
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import type { Conflict, Page } from '@nonstop/shared';
+import { PROP_PREFIX, type Conflict, type Page } from '@nonstop/shared';
+import { createDatabasePage, renameDatabase } from '../data/databases.ts';
 import { createPage, deletePermanently, renamePage, resolveConflict, restorePage, setFavorite, trashPage } from '../data/pages.ts';
-import { usePageConflicts, useStore } from '../data/workspace.tsx';
+import { useData, usePageConflicts, useStore } from '../data/workspace.tsx';
 import { contentText } from '../model/blocks.ts';
+import { cellText, cellValue, type Row } from '../model/database.ts';
 import { UNTITLED, visibleChildren, type PageIndex } from '../model/pages.ts';
 import { navigate, pagePath } from '../router.ts';
+import { DatabaseView } from './database/DatabaseView.tsx';
+import { RowProperties } from './database/RowProperties.tsx';
 import { MoveDialog } from './MoveDialog.tsx';
 
 const TITLE_SAVE_MS = 400;
@@ -15,12 +19,16 @@ const PageEditor = lazy(() => import('../editor/PageEditor.tsx'));
 
 export function PageView({ index, page }: { index: PageIndex; page: Page }) {
   const store = useStore();
+  const { databases } = useData();
   const [moving, setMoving] = useState(false);
   const trashed = index.isTrashed(page.id);
   const children = visibleChildren(index, page.id);
   const crumbs = index.ancestors(page.id);
+  const fullDatabase = databases.fullPageOf(page.id);
+  const isRow = page.databaseId !== null;
 
   const addChild = async () => navigate(pagePath(await createPage(store, index, page.id)));
+  const addDatabase = async () => navigate(pagePath(await createDatabasePage(store, index, page.id)));
 
   return (
     <article className="page-view">
@@ -45,6 +53,8 @@ export function PageView({ index, page }: { index: PageIndex; page: Page }) {
 
       <TitleInput key={page.id} page={page} readOnly={trashed} />
 
+      {isRow && <RowProperties page={page} readOnly={trashed} />}
+
       {!trashed && (
         <div className="row actions">
           <button className="ghost" aria-pressed={page.isFavorite} onClick={() => void setFavorite(store, page.id, !page.isFavorite)}>
@@ -53,9 +63,14 @@ export function PageView({ index, page }: { index: PageIndex; page: Page }) {
           <button className="ghost" onClick={() => void addChild()}>
             + Sub-halaman
           </button>
-          <button className="ghost" onClick={() => setMoving(true)}>
-            Pindahkan
+          <button className="ghost" onClick={() => void addDatabase()}>
+            + Database
           </button>
+          {!isRow && (
+            <button className="ghost" onClick={() => setMoving(true)}>
+              Pindahkan
+            </button>
+          )}
           <button
             className="ghost danger"
             onClick={async () => {
@@ -75,11 +90,15 @@ export function PageView({ index, page }: { index: PageIndex; page: Page }) {
         </div>
       )}
 
-      <div className="editor" data-testid="editor">
-        <Suspense fallback={<p className="muted">Memuat editor…</p>}>
-          <PageEditor pageId={page.id} readOnly={trashed} />
-        </Suspense>
-      </div>
+      {fullDatabase ? (
+        <DatabaseView databaseId={fullDatabase.id} readOnly={trashed} />
+      ) : (
+        <div className="editor" data-testid="editor">
+          <Suspense fallback={<p className="muted">Memuat editor…</p>}>
+            <PageEditor pageId={page.id} readOnly={trashed} />
+          </Suspense>
+        </div>
+      )}
 
       {children.length > 0 && (
         <section aria-label="Sub-halaman">
@@ -203,12 +222,31 @@ function TitleInput({ page, readOnly }: { page: Page; readOnly: boolean }) {
 
 function ConflictBanner({ pageId, current }: { pageId: string; current: string }) {
   const store = useStore();
+  const { databases } = useData();
   const conflicts = usePageConflicts(pageId);
   if (!conflicts.length) return null;
   const isTitle = (c: Conflict) => c.entity === 'page' && c.field === 'title';
-  const preview = (c: Conflict) => (isTitle(c) ? String(c.value ?? '') : contentText(c.value)) || UNTITLED;
+  const isProp = (c: Conflict) => c.entity === 'page' && c.field.startsWith(PROP_PREFIX);
+  const label = (c: Conflict) => {
+    if (isTitle(c)) return 'Judul';
+    if (c.entity === 'database') return 'Judul database';
+    if (isProp(c)) return `Properti ${databases.property(c.field.slice(PROP_PREFIX.length))?.name ?? '(terhapus)'}`;
+    return 'Isi blok';
+  };
+  const preview = (c: Conflict) => {
+    if (isTitle(c) || c.entity === 'database') return String(c.value ?? '') || UNTITLED;
+    if (isProp(c)) {
+      const prop = databases.property(c.field.slice(PROP_PREFIX.length));
+      // Only the values matter for reading a stored value; the row's other fields are not used.
+      const text = prop ? cellText(cellValue(databases, prop, { id: c.entityId, values: { [c.field]: c.value } } as Row)) : '';
+      return text || '(kosong)';
+    }
+    return contentText(c.value) || UNTITLED;
+  };
   const use = async (c: Conflict) => {
     if (isTitle(c)) await renamePage(store, pageId, String(c.value ?? ''));
+    else if (c.entity === 'database') await renameDatabase(store, c.entityId, String(c.value ?? ''));
+    else if (isProp(c)) await store.write('page', c.entityId, { [c.field]: c.value });
     else await store.write('block', c.entityId, { content: c.value, deleted: false });
     await resolveConflict(store, c.id);
   };
@@ -222,7 +260,7 @@ function ConflictBanner({ pageId, current }: { pageId: string; current: string }
         {conflicts.map((c) => (
           <li key={c.id}>
             <span>
-              <span className="muted">{isTitle(c) ? 'Judul' : 'Isi blok'}: </span>“{preview(c)}”{' '}
+              <span className="muted">{label(c)}: </span>“{preview(c)}”{' '}
               <span className="muted">
                 dari perangkat {c.deviceId.split('-')[0]}, {formatTime(c.hlc)}
               </span>

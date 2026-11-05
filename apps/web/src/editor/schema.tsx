@@ -1,6 +1,7 @@
 // Editor schema: the block types of F-03, plus a custom callout block.
 import { BlockNoteSchema, createHeadingBlockSpec, defaultBlockSpecs, defaultInlineContentSpecs, defaultStyleSpecs } from '@blocknote/core';
 import { createReactBlockSpec } from '@blocknote/react';
+import { InlineDatabase } from '../workspace/database/InlineDatabase.tsx';
 
 const CALLOUT_ICONS = ['💡', '⚠️', '✅', '❗', '📌'] as const;
 
@@ -28,6 +29,22 @@ export const calloutBlock = createReactBlockSpec(
   },
 );
 
+/** Inline database (F-10). The database itself is a synced record; the block only points to it. */
+export const databaseBlock = createReactBlockSpec(
+  {
+    type: 'database',
+    propSchema: { databaseId: { default: '' } },
+    content: 'none',
+  },
+  {
+    render: ({ block, editor }) => (
+      <div className="inline-db" contentEditable={false}>
+        <InlineDatabase databaseId={block.props.databaseId} readOnly={!editor.isEditable} />
+      </div>
+    ),
+  },
+);
+
 const { paragraph, bulletListItem, numberedListItem, checkListItem, toggleListItem, quote, codeBlock, divider } = defaultBlockSpecs;
 
 export const schema = BlockNoteSchema.create({
@@ -42,6 +59,7 @@ export const schema = BlockNoteSchema.create({
     callout: calloutBlock(),
     codeBlock,
     divider,
+    database: databaseBlock(),
   },
   inlineContentSpecs: defaultInlineContentSpecs,
   styleSpecs: defaultStyleSpecs,

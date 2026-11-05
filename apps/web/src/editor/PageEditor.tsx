@@ -12,8 +12,9 @@ import { BlockNoteView } from '@blocknote/ariakit';
 import '@blocknote/ariakit/style.css';
 import { compareHlc, sameValue, type Block } from '@nonstop/shared';
 import type { Stored } from '../data/db.ts';
+import { createInlineDatabase, newId } from '../data/databases.ts';
 import { useStore } from '../data/workspace.tsx';
-import { buildDocument, diffDocument, liveBlocks, toSnapshot, type DocBlock, type FlatBlock, type Snapshot } from '../model/blocks.ts';
+import { buildDocument, diffDocument, hasNoContent, liveBlocks, toSnapshot, type DocBlock, type FlatBlock, type Snapshot } from '../model/blocks.ts';
 import { schema } from './schema.tsx';
 import { slashMenuItems } from './slash-menu.tsx';
 
@@ -181,6 +182,12 @@ function EditorInner({ pageId, rows, readOnly }: { pageId: string; rows: Stored<
     }
   }
 
+  const createDatabase = () => {
+    const id = newId();
+    void createInlineDatabase(store, id, pageId);
+    return id;
+  };
+
   return (
     <BlockNoteView
       editor={editor}
@@ -195,12 +202,12 @@ function EditorInner({ pageId, rows, readOnly }: { pageId: string; rows: Stored<
       }}
       onBlur={() => timer.current && save()}
     >
-      <SuggestionMenuController triggerCharacter="/" getItems={async (query) => filterSuggestionItems(slashMenuItems(editor), query)} />
+      <SuggestionMenuController triggerCharacter="/" getItems={async (query) => filterSuggestionItems(slashMenuItems(editor, createDatabase), query)} />
     </BlockNoteView>
   );
 }
 
 function updateIfChanged(ed: { updateBlock: (id: string, b: never) => unknown }, old: FlatBlock | undefined, b: FlatBlock) {
   if (old && old.type === b.type && sameValue(old.props, b.props) && sameValue(old.content, b.content)) return;
-  ed.updateBlock(b.id, { type: b.type, props: b.props, content: b.type === 'divider' ? undefined : b.content } as never);
+  ed.updateBlock(b.id, { type: b.type, props: b.props, content: hasNoContent(b.type) ? undefined : b.content } as never);
 }

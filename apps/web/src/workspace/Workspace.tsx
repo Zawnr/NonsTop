@@ -1,7 +1,8 @@
 // App layout: sidebar (fixed on wide screens, drawer on phones) and the current view.
 import { useEffect, useState } from 'react';
+import { createDatabasePage } from '../data/databases.ts';
 import { createPage } from '../data/pages.ts';
-import { usePageIndex, useStore } from '../data/workspace.tsx';
+import { DataContext, useLiveWorkspaceData, useStore } from '../data/workspace.tsx';
 import { favorites, trashRoots, UNTITLED, type PageIndex } from '../model/pages.ts';
 import { navigate, pagePath, useRoute } from '../router.ts';
 import { PageTree } from './PageTree.tsx';
@@ -12,7 +13,8 @@ import { SyncBadge } from './SyncBadge.tsx';
 import { TrashView } from './TrashView.tsx';
 
 export function Workspace({ onLogout }: { onLogout: () => void }) {
-  const index = usePageIndex();
+  const data = useLiveWorkspaceData();
+  const index = data?.pages;
   const route = useRoute();
   const [navOpen, setNavOpen] = useState(false);
   const [searching, setSearching] = useState(false);
@@ -31,7 +33,7 @@ export function Workspace({ onLogout }: { onLogout: () => void }) {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  if (!index) return null;
+  if (!data || !index) return null;
   const trashCount = trashRoots(index).length;
   const currentId = route.name === 'page' ? route.id : null;
   const closeNav = () => setNavOpen(false);
@@ -41,7 +43,13 @@ export function Workspace({ onLogout }: { onLogout: () => void }) {
     closeNav();
   };
 
+  const newDatabase = async () => {
+    navigate(pagePath(await createDatabasePage(store, index, null)));
+    closeNav();
+  };
+
   return (
+    <DataContext.Provider value={data}>
     <div className={navOpen ? 'shell nav-open' : 'shell'}>
       <aside className="sidebar" aria-label="Navigasi">
         <div className="sidebar-head">
@@ -55,6 +63,9 @@ export function Workspace({ onLogout }: { onLogout: () => void }) {
         </button>
         <button className="new-page" onClick={() => void newPage()}>
           + Halaman baru
+        </button>
+        <button className="ghost new-page" onClick={() => void newDatabase()}>
+          + Database baru
         </button>
         <Favorites index={index} currentId={currentId} onNavigate={closeNav} />
         <h2 className="section-title">Halaman</h2>
@@ -76,6 +87,7 @@ export function Workspace({ onLogout }: { onLogout: () => void }) {
       </main>
       {searching && <SearchDialog index={index} onClose={() => setSearching(false)} />}
     </div>
+    </DataContext.Provider>
   );
 }
 

@@ -18,7 +18,8 @@ const LABELS: Record<string, { title: string; subtext: string; aliases: string[]
 };
 const GROUP = 'Blok';
 
-export function slashMenuItems(editor: Editor): DefaultReactSuggestionItem[] {
+/** `createDatabase` creates the database record and returns its id (F-10). */
+export function slashMenuItems(editor: Editor, createDatabase: () => string): DefaultReactSuggestionItem[] {
   const core = getDefaultSlashMenuItems(editor);
   const react = getDefaultReactSlashMenuItems(editor); // same order as core, with icons
   const items: DefaultReactSuggestionItem[] = [];
@@ -35,6 +36,14 @@ export function slashMenuItems(editor: Editor): DefaultReactSuggestionItem[] {
     group: GROUP,
     icon: <span aria-hidden="true">💡</span>,
     onItemClick: () => insertOrUpdateBlockForSlashMenu(editor, { type: 'callout' }),
+  });
+  items.push({
+    title: 'Database',
+    subtext: 'Tabel inline dengan properti dan baris',
+    aliases: ['database', 'tabel', 'table', 'db'],
+    group: GROUP,
+    icon: <span aria-hidden="true">▦</span>,
+    onItemClick: () => insertOrUpdateBlockForSlashMenu(editor, { type: 'database', props: { databaseId: createDatabase() } }),
   });
   return items;
 }

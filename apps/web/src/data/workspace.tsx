@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useMemo, useState, useSyncExterna
 import { useLiveQuery } from 'dexie-react-hooks';
 import type { Conflict } from '@nonstop/shared';
 import { api, ApiError, isOfflineError } from '../api.ts';
+import { indexDatabases, normalizeDatabase, normalizeProperty, normalizeView, type DatabaseIndex } from '../model/database.ts';
 import { indexPages, normalizePage, type PageIndex } from '../model/pages.ts';
 import { NonstopDb } from './db.ts';
 import { LocalStore } from './store.ts';
@@ -68,11 +69,45 @@ export function useSyncNow(): () => void {
   return () => void engine.sync();
 }
 
-/** Live index of all pages. Undefined until the first read from IndexedDB finishes. */
-export function usePageIndex(): PageIndex | undefined {
+export interface WorkspaceData {
+  pages: PageIndex;
+  databases: DatabaseIndex;
+}
+
+/** Live index of all pages and databases. Undefined until the first read from IndexedDB finishes. */
+export function useLiveWorkspaceData(): WorkspaceData | undefined {
   const { store } = useWorkspace();
-  const records = useLiveQuery(() => store.db.page.toArray(), [store]);
-  return useMemo(() => (records ? indexPages(records.map(normalizePage)) : undefined), [records]);
+  const db = store.db;
+  const records = useLiveQuery(
+    () => db.transaction('r', [db.page, db.database, db.property, db.view], async () => ({
+      pages: await db.page.toArray(),
+      databases: await db.database.toArray(),
+      properties: await db.property.toArray(),
+      views: await db.view.toArray(),
+    })),
+    [db],
+  );
+  return useMemo(() => {
+    if (!records) return undefined;
+    const pages = indexPages(records.pages.map(normalizePage));
+    const databases = indexDatabases(
+      records.databases.map(normalizeDatabase),
+      records.properties.map(normalizeProperty),
+      records.views.map(normalizeView),
+      pages,
+      records.pages,
+    );
+    return { pages, databases };
+  }, [records]);
+}
+
+/** The workspace data for components deep in the tree, such as inline databases inside the editor. */
+export const DataContext = createContext<WorkspaceData | null>(null);
+
+export function useData(): WorkspaceData {
+  const data = useContext(DataContext);
+  if (!data) throw new Error('useData outside DataContext');
+  return data;
 }
 
 /** Unresolved conflicts ("other versions") for one page. */

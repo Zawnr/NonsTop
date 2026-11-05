@@ -31,6 +31,9 @@ export interface BlockWrite {
   fields: Partial<Omit<Block, 'id'>>;
 }
 
+/** Blocks without inline content: the editor expects no content field for them. */
+export const hasNoContent = (type: string) => type === 'divider' || type === 'database';
+
 const knownType = (t: unknown): t is BlockType => typeof t === 'string' && (blockTypes as readonly string[]).includes(t);
 
 /** Live blocks of a page from the store, with defaults for fields that have not arrived yet. */
@@ -86,7 +89,7 @@ export function buildDocument(blocks: FlatBlock[]): DocBlock[] {
       id: b.id,
       type: b.type,
       props: { ...b.props },
-      content: b.type === 'divider' ? undefined : b.content,
+      content: hasNoContent(b.type) ? undefined : b.content,
       children: build(b.id),
     }));
   return build(null);
@@ -125,7 +128,7 @@ export function diffDocument(
         sortKey,
         type: block.type as BlockType, // filtered by knownType above
         props: cleanProps(block.props),
-        content: block.type === 'divider' ? [] : (block.content ?? []),
+        content: hasNoContent(block.type) ? [] : (block.content ?? []),
       };
       next.set(block.id, flat);
 
