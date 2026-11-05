@@ -82,7 +82,8 @@ test('database: properties are renamed, reordered, hidden, deleted, and options 
 
   // Rename and move left.
   await table(page).getByRole('button', { name: 'Biaya', exact: true }).click();
-  let menu = page.getByRole('dialog', { name: 'Properti Biaya' });
+  // Renaming relabels the open menu, so match it under either name.
+  let menu = page.getByRole('dialog', { name: /^Properti (Biaya|Harga)$/ });
   // On a touch screen the menu opens without raising the keyboard; a tap on the field does.
   if (test.info().project.name === 'android') await expect(menu.getByLabel('Nama properti')).not.toBeFocused();
   else await expect(menu.getByLabel('Nama properti')).toBeFocused();

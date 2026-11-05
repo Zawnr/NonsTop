@@ -1,7 +1,7 @@
 // Board view (F-21): one column per option of a status or select property. Cards move between
 // columns by dragging (long press on touch screens) or through their "Pindah ke" menu.
 import { useRef, useState } from 'react';
-import { DndContext, MouseSensor, pointerWithin, TouchSensor, useDraggable, useDroppable, useSensor, useSensors, type DragMoveEvent } from '@dnd-kit/core';
+import { DndContext, MouseSensor, pointerWithin, TouchSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent, type DragMoveEvent } from '@dnd-kit/core';
 import { propField, type Property, type View } from '@nonstop/shared';
 import { renamePage } from '../../data/pages.ts';
 import { useData, useStore } from '../../data/workspace.tsx';
@@ -22,7 +22,7 @@ const COLUMN = 'col:';
 const colId = (key: string | null) => COLUMN + (key ?? '');
 const colKey = (id: string): string | null => id.slice(COLUMN.length) || null;
 
-function pointerY(e: DragMoveEvent): number | null {
+function pointerY(e: DragMoveEvent | DragEndEvent): number | null {
   const start = e.activatorEvent;
   let y: number | null = null;
   if (start instanceof MouseEvent) y = start.clientY;
@@ -74,19 +74,20 @@ export function BoardView({
     if (Object.keys(fields).length) void store.write('page', rowId, fields);
   };
 
-  const onDragMove = (e: DragMoveEvent) => {
+  /** Where the dragged card would land, from the pointer position of a drag event. */
+  const dropAt = (e: DragMoveEvent | DragEndEvent): Drop | null => {
     const over = e.over ? String(e.over.id) : null;
-    if (!over) return setDrop(null);
-    if (over.startsWith(COLUMN)) return setDrop({ column: colKey(over), beforeId: null });
+    if (!over) return null;
+    if (over.startsWith(COLUMN)) return { column: colKey(over), beforeId: null };
     const column = columnOf(over);
-    if (!column) return setDrop(null);
+    if (!column) return null;
     const y = pointerY(e);
     const { top, height } = e.over!.rect;
     if (y !== null && y > top + height / 2) {
       const i = column.rows.findIndex((r) => r.id === over);
-      return setDrop({ column: column.key, beforeId: column.rows[i + 1]?.id ?? null });
+      return { column: column.key, beforeId: column.rows[i + 1]?.id ?? null };
     }
-    setDrop({ column: column.key, beforeId: over });
+    return { column: column.key, beforeId: over };
   };
 
   return (
@@ -94,9 +95,11 @@ export function BoardView({
       sensors={sensors}
       collisionDetection={pointerWithin}
       onDragStart={(e) => setDragging(String(e.active.id))}
-      onDragMove={onDragMove}
+      onDragMove={(e) => setDrop(dropAt(e))}
       onDragEnd={(e) => {
-        if (drop) move(String(e.active.id), drop);
+        // Computed from the end event itself: a quick release can come before the last move re-renders.
+        const target = dropAt(e);
+        if (target) move(String(e.active.id), target);
         setDrop(null);
         setDragging(null);
       }}

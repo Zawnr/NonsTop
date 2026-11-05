@@ -48,7 +48,7 @@ function flatten(index: PageIndex, expanded: Set<string>): Row[] {
   return rows;
 }
 
-function pointerY(e: DragMoveEvent): number | null {
+function pointerY(e: DragMoveEvent | DragEndEvent): number | null {
   const start = e.activatorEvent;
   let y: number | null = null;
   if (start instanceof MouseEvent) y = start.clientY;
@@ -98,23 +98,27 @@ export function PageTree({ index, currentId, onNavigate }: { index: PageIndex; c
     onNavigate();
   };
 
-  const onDragMove = (e: DragMoveEvent) => {
+  /** Where the dragged page would land, from the pointer position of a drag event. */
+  const dropAt = (e: DragMoveEvent | DragEndEvent): Drop | null => {
     const y = pointerY(e);
-    if (!e.over || y === null) return setDrop(null);
+    if (!e.over || y === null) return null;
     const { top, height } = e.over.rect;
     const position: DropPosition = y < top + height * 0.25 ? 'before' : y > top + height * 0.75 ? 'after' : 'inside';
     const targetId = String(e.over.id);
-    const valid = placeRelative(index, String(e.active.id), targetId, position) !== null;
-    setDrop(valid ? { targetId, position } : null);
+    return placeRelative(index, String(e.active.id), targetId, position) !== null ? { targetId, position } : null;
   };
+
+  const onDragMove = (e: DragMoveEvent) => setDrop(dropAt(e));
 
   const onDragEnd = (e: DragEndEvent) => {
     const movingId = String(e.active.id);
-    if (drop) {
-      const place = placeRelative(index, movingId, drop.targetId, drop.position);
+    // Computed from the end event itself: a quick release can come before the last move re-renders.
+    const target = dropAt(e);
+    if (target) {
+      const place = placeRelative(index, movingId, target.targetId, target.position);
       if (place) {
         void movePage(store, movingId, place);
-        if (drop.position === 'inside') save(new Set([...expanded, drop.targetId]));
+        if (target.position === 'inside') save(new Set([...expanded, target.targetId]));
       }
     }
     setDrop(null);
