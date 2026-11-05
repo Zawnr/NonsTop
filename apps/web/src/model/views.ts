@@ -2,7 +2,7 @@
 // how they group into board columns or table sections. No I/O, fully unit-tested.
 import { TITLE_PROPERTY, type FilterOp, type Property, type PropertyType, type SelectOption, type View, type ViewFilter, type ViewSort } from '@nonstop/shared';
 import { cellText, cellValue, formatDate, type CellValue, type DatabaseIndex, type Row } from './database.ts';
-import { UNTITLED } from './pages.ts';
+import { keyBetween, UNTITLED } from './pages.ts';
 
 /** A filter or sort target: a property, or the title column. */
 export type FieldKind = PropertyType | 'title';
@@ -274,4 +274,16 @@ export function filterLabel(db: DatabaseIndex, properties: Property[], filter: V
     if (field.type === 'date' && typeof filter.value === 'string') value = formatDate(filter.value);
   }
   return `${name} ${OP_LABELS[filter.op]} ${value}`;
+}
+
+/**
+ * Sort key for a card dropped into a board column before `beforeId` (null = at the end). Neighbours
+ * are the column's cards in display order without the moving card. Rows share one order across
+ * columns, so a key between the two neighbours keeps both columns in order.
+ */
+export function cardKey(column: Row[], movingId: string, beforeId: string | null): string {
+  const rest = column.filter((r) => r.id !== movingId);
+  const i = beforeId === null ? rest.length : rest.findIndex((r) => r.id === beforeId);
+  const at = i < 0 ? rest.length : i;
+  return keyBetween(rest[at - 1]?.sortKey ?? null, rest[at]?.sortKey ?? null);
 }

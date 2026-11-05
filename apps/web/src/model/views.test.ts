@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { propField, TITLE_PROPERTY, type ViewFilter } from '@nonstop/shared';
 import { build, db, ids, page, prop, view } from './test-fixtures.ts';
-import { filterLabel, groupRows, hiddenAfter, matchesFilter, prefillValues, viewRows, visibleProperties } from './views.ts';
+import { cardKey, filterLabel, groupRows, hiddenAfter, matchesFilter, prefillValues, viewRows, visibleProperties } from './views.ts';
 
 const status = prop('st', 'db1', {
   name: 'Status',
@@ -151,5 +151,16 @@ describe('filterLabel', () => {
     expect(filterLabel(index, props, f('st', 'is', 'done'))).toBe('Status adalah Selesai');
     expect(filterLabel(index, props, f(TITLE_PROPERTY, 'empty'))).toBe('Judul kosong');
     expect(filterLabel(index, props, f('d', 'before', '2026-11-05'))).toBe('Tenggat sebelum 5 Nov 2026');
+  });
+});
+
+describe('cardKey', () => {
+  it('places a card between its new neighbours, or at the end', () => {
+    const { index } = setup();
+    const column = index.rowsOf('db1'); // a1, a2, a3
+    const k = cardKey(column, 'r3', 'r2');
+    expect(k > 'a1' && k < 'a2').toBe(true);
+    expect(cardKey(column, 'r1', null) > 'a3').toBe(true);
+    expect(cardKey(column, 'x', 'r1') < 'a1').toBe(true);
   });
 });

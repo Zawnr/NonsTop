@@ -39,7 +39,11 @@ export const databaseBlock = createReactBlockSpec(
   {
     render: ({ block, editor }) => (
       <div className="inline-db" contentEditable={false}>
-        <InlineDatabase databaseId={block.props.databaseId} readOnly={!editor.isEditable} />
+        <InlineDatabase
+          databaseId={block.props.databaseId}
+          readOnly={!editor.isEditable}
+          insertAfter={(databaseId) => editor.insertBlocks([{ type: 'database', props: { databaseId } }], block, 'after')}
+        />
       </div>
     ),
     // Copy and export: a plain marker. The live table needs the app's data context, which a

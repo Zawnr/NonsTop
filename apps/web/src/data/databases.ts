@@ -1,5 +1,5 @@
 // Database actions (F-10, F-13, F-15). Every change is a field write through the local store.
-import { propField, type Database, type Page, type Property, type PropertyConfig, type PropertyType, type SelectOption, type ViewType } from '@nonstop/shared';
+import { propField, type Database, type Page, type Property, type PropertyConfig, type PropertyType, type SelectOption, type View, type ViewType } from '@nonstop/shared';
 import { defaultConfig, keyAfter, relationWrites, type DatabaseIndex, type Row } from '../model/database.ts';
 import { placeAtEnd, type PageIndex } from '../model/pages.ts';
 import type { LocalStore } from './store.ts';
@@ -145,6 +145,10 @@ export async function addView(store: LocalStore, index: DatabaseIndex, databaseI
 }
 
 export const renameView = (store: LocalStore, id: string, name: string) => store.write('view', id, { name });
+
+/** Changes a view's filters, sorts, grouping or hidden properties (F-23). */
+export const updateView = (store: LocalStore, id: string, fields: Partial<Pick<View, 'filters' | 'sorts' | 'groupBy' | 'hiddenProps'>>) =>
+  store.write('view', id, fields);
 export const deleteView = (store: LocalStore, id: string) => store.write('view', id, { deleted: true });
 
 /**

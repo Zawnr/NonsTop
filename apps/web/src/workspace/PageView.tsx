@@ -1,16 +1,19 @@
 // One page: title, actions, sub-pages, and the "other version" marker for conflicts (F-63).
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { PROP_PREFIX, type Conflict, type Page } from '@nonstop/shared';
+import { duplicatePage, setDefaultTemplate, setTemplate } from '../data/copy.ts';
 import { createDatabasePage, renameDatabase } from '../data/databases.ts';
 import { createPage, deletePermanently, renamePage, resolveConflict, restorePage, setFavorite, trashPage } from '../data/pages.ts';
 import { useData, usePageConflicts, useStore } from '../data/workspace.tsx';
 import { contentText } from '../model/blocks.ts';
-import { cellText, cellValue, type Row } from '../model/database.ts';
+import { cellText, cellValue, databaseTitle, type DatabaseIndex, type Row } from '../model/database.ts';
 import { UNTITLED, visibleChildren, type PageIndex } from '../model/pages.ts';
 import { navigate, pagePath } from '../router.ts';
 import { DatabaseView } from './database/DatabaseView.tsx';
 import { RowProperties } from './database/RowProperties.tsx';
+import { Popover } from './database/Popover.tsx';
 import { MoveDialog } from './MoveDialog.tsx';
+import { EmptyPageTemplates, useIsEmptyPage } from './Templates.tsx';
 
 const TITLE_SAVE_MS = 400;
 
@@ -26,6 +29,8 @@ export function PageView({ index, page }: { index: PageIndex; page: Page }) {
   const crumbs = index.ancestors(page.id);
   const fullDatabase = databases.fullPageOf(page.id);
   const isRow = page.databaseId !== null;
+  const rowDb = page.databaseId ? databases.byId.get(page.databaseId) : undefined;
+  const empty = useIsEmptyPage(page);
 
   const addChild = async () => navigate(pagePath(await createPage(store, index, page.id)));
   const addDatabase = async () => navigate(pagePath(await createDatabasePage(store, index, page.id)));
@@ -53,6 +58,25 @@ export function PageView({ index, page }: { index: PageIndex; page: Page }) {
 
       <TitleInput key={page.id} page={page} readOnly={trashed} />
 
+      {isRow && page.isTemplate && rowDb && (
+        <div className="banner" role="status">
+          <span>
+            Template baris untuk {databaseTitle(rowDb, index)}
+            {rowDb.defaultTemplateId === page.id ? ' (default)' : ''}. Baris baru dari template ini menyalin judul, properti, dan isinya.
+          </span>
+          {!trashed && (
+            <button className="ghost" onClick={() => void setDefaultTemplate(store, rowDb.id, rowDb.defaultTemplateId === page.id ? null : page.id)}>
+              {rowDb.defaultTemplateId === page.id ? 'Bukan default' : 'Jadikan default'}
+            </button>
+          )}
+        </div>
+      )}
+      {!isRow && page.isTemplate && (
+        <div className="banner" role="status">
+          <span>Halaman ini template. Pakai lewat “Dari template…” di sidebar atau di halaman kosong.</span>
+        </div>
+      )}
+
       {isRow && <RowProperties page={page} readOnly={trashed} />}
 
       {!trashed && (
@@ -69,6 +93,12 @@ export function PageView({ index, page }: { index: PageIndex; page: Page }) {
           {!isRow && (
             <button className="ghost" onClick={() => setMoving(true)}>
               Pindahkan
+            </button>
+          )}
+          <DuplicateButton index={index} databases={databases} page={page} />
+          {!isRow && (
+            <button className="ghost" aria-pressed={page.isTemplate} onClick={() => void setTemplate(store, page.id, !page.isTemplate)}>
+              {page.isTemplate ? 'Bukan template' : 'Jadikan template'}
             </button>
           )}
           <button
@@ -89,6 +119,8 @@ export function PageView({ index, page }: { index: PageIndex; page: Page }) {
           </button>
         </div>
       )}
+
+      {empty && !trashed && !isRow && !page.isTemplate && <EmptyPageTemplates page={page} />}
 
       {fullDatabase ? (
         <DatabaseView key={fullDatabase.id} databaseId={fullDatabase.id} readOnly={trashed} />
@@ -117,6 +149,39 @@ export function PageView({ index, page }: { index: PageIndex; page: Page }) {
 
       {moving && <MoveDialog index={index} page={page} onClose={() => setMoving(false)} />}
     </article>
+  );
+}
+
+/** Duplicates the page (F-32). A page with databases asks whether their rows come along. */
+function DuplicateButton({ index, databases, page }: { index: PageIndex; databases: DatabaseIndex; page: Page }) {
+  const store = useStore();
+  const [open, setOpen] = useState(false);
+  const btn = useRef<HTMLButtonElement>(null);
+  const ids = new Set([page.id, ...index.descendants(page.id).map((p) => p.id)]);
+  const hasDatabase = [...databases.byId.values()].some((d) => ids.has(d.pageId));
+  const run = async (withRows: boolean) => {
+    setOpen(false);
+    navigate(pagePath(await duplicatePage(store, index, databases, page.id, withRows)));
+  };
+  return (
+    <>
+      <button ref={btn} className="ghost" onClick={() => (hasDatabase ? setOpen(true) : void run(true))}>
+        Duplikat
+      </button>
+      {open && (
+        <Popover anchor={btn.current} label="Duplikat" onClose={() => setOpen(false)}>
+          <div className="pop-list">
+            <button type="button" className="ghost pop-item" onClick={() => void run(true)}>
+              Duplikat dengan isi
+            </button>
+            <button type="button" className="ghost pop-item" onClick={() => void run(false)}>
+              Duplikat struktur saja
+            </button>
+            <p className="muted pop-head">Struktur saja: database tanpa baris, template baris tetap ikut.</p>
+          </div>
+        </Popover>
+      )}
+    </>
   );
 }
 
