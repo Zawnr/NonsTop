@@ -46,6 +46,8 @@ const pageFields = {
   createdAt: timestamp,
   /** Set when the page is a row of a database (F-14). Rows are hidden from the sidebar tree. */
   databaseId: id.nullable(),
+  /** A page template (F-30), or a row template when `databaseId` is set (F-31). */
+  isTemplate: z.boolean(),
 };
 
 /** Prefix of a row's property value fields: `prop.<propertyId>`. */
@@ -113,6 +115,8 @@ const databaseFields = {
   title: z.string().max(500),
   deleted: z.boolean(),
   createdAt: timestamp,
+  /** Row template used by "+ Baris baru" (F-31). null = an empty row. */
+  defaultTemplateId: id.nullable(),
 };
 
 export const propertyTypes = ['text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url', 'relation'] as const;
@@ -155,8 +159,42 @@ const propertyFields = {
   deleted: z.boolean(),
 };
 
-export const viewTypes = ['table', 'list'] as const;
+export const viewTypes = ['table', 'list', 'board'] as const;
 export type ViewType = (typeof viewTypes)[number];
+
+/** The title column has no property record; filters and sorts refer to it by this id. */
+export const TITLE_PROPERTY = 'title';
+
+export const filterOps = [
+  'contains',
+  'notContains',
+  'is',
+  'isNot',
+  'empty',
+  'notEmpty',
+  'eq',
+  'neq',
+  'gt',
+  'lt',
+  'gte',
+  'lte',
+  'before',
+  'after',
+  'checked',
+  'unchecked',
+] as const;
+export type FilterOp = (typeof filterOps)[number];
+
+const viewFilter = z.object({
+  propertyId: id,
+  op: z.enum(filterOps),
+  /** Text, number, option or row id, or ISO date. null for operators without a value. */
+  value: z.union([z.null(), z.string().max(500), z.number().finite()]),
+});
+export type ViewFilter = z.infer<typeof viewFilter>;
+
+const viewSort = z.object({ propertyId: id, dir: z.enum(['asc', 'desc']) });
+export type ViewSort = z.infer<typeof viewSort>;
 
 const viewFields = {
   databaseId: id,
@@ -164,6 +202,13 @@ const viewFields = {
   type: z.enum(viewTypes),
   sortKey,
   deleted: z.boolean(),
+  /** All filters must match (F-23). */
+  filters: z.array(viewFilter).max(20),
+  sorts: z.array(viewSort).max(10),
+  /** Property that groups rows: board columns, or sections of a table or list. */
+  groupBy: id.nullable(),
+  /** Properties hidden in this view. null = use each property's own `hidden` flag (sprint 3 views). */
+  hiddenProps: z.array(id).max(200).nullable(),
 };
 
 const conflictFields = {
@@ -233,6 +278,7 @@ export interface Page {
   deleted: boolean;
   createdAt: number;
   databaseId: string | null;
+  isTemplate: boolean;
 }
 
 /** A row's property values, keyed by field name (`prop.<propertyId>`). */
@@ -245,6 +291,7 @@ export interface Database {
   title: string;
   deleted: boolean;
   createdAt: number;
+  defaultTemplateId: string | null;
 }
 
 export interface Property {
@@ -265,6 +312,10 @@ export interface View {
   type: ViewType;
   sortKey: string;
   deleted: boolean;
+  filters: ViewFilter[];
+  sorts: ViewSort[];
+  groupBy: string | null;
+  hiddenProps: string[] | null;
 }
 
 export interface Block {

@@ -53,6 +53,7 @@ export function normalizeDatabase(rec: Stored<Database>): Database {
     title: rec.title ?? '',
     deleted: rec.deleted ?? false,
     createdAt: rec.createdAt ?? 0,
+    defaultTemplateId: rec.defaultTemplateId ?? null,
   };
 }
 
@@ -77,6 +78,10 @@ export function normalizeView(rec: Stored<View>): View {
     type: rec.type ?? 'table',
     sortKey: rec.sortKey ?? 'a0',
     deleted: rec.deleted ?? false,
+    filters: rec.filters ?? [],
+    sorts: rec.sorts ?? [],
+    groupBy: rec.groupBy ?? null,
+    hiddenProps: rec.hiddenProps ?? null,
   };
 }
 
@@ -98,6 +103,8 @@ export interface DatabaseIndex {
   rowsOf: (databaseId: string, inTrash?: boolean) => Row[];
   /** Any live row by id, trashed ones included (a trashed row page still shows its values). */
   row: (id: string) => Row | undefined;
+  /** Row templates of a database (F-31), not trashed. They are rows that no view shows. */
+  templatesOf: (databaseId: string) => Row[];
   /** Rows whose forward relation property `propertyId` contains `rowId`. Built once per index. */
   linking: (propertyId: string, rowId: string) => Row[];
   /** A page is a row of a database that no longer exists (deleted inline database). */
@@ -143,6 +150,7 @@ export function indexDatabases(
   const ownLive = new Map<string, Row[]>();
   const rowById = new Map<string, Row>();
   const orphans = new Set<string>();
+  const templates = new Map<string, Row[]>();
   const push = (map: Map<string, Row[]>, key: string, row: Row) => {
     if (!map.has(key)) map.set(key, []);
     map.get(key)!.push(row);
@@ -155,10 +163,14 @@ export function indexDatabases(
     }
     const row: Row = { ...p, values: (records.get(p.id) ?? {}) as Record<string, unknown> };
     rowById.set(p.id, row);
+    if (p.isTemplate) {
+      if (!pages.isTrashed(p.id)) push(templates, p.databaseId, row);
+      continue;
+    }
     if (p.trashedAt === null) push(ownLive, p.databaseId, row);
     if (!pages.isTrashed(p.id)) push(rows, p.databaseId, row);
   }
-  for (const l of [...rows.values(), ...ownLive.values()]) l.sort(bySortKey);
+  for (const l of [...rows.values(), ...ownLive.values(), ...templates.values()]) l.sort(bySortKey);
 
   // Reverse relation lookups, built on first use per forward property.
   const linkCache = new Map<string, Map<string, Row[]>>();
@@ -184,6 +196,7 @@ export function indexDatabases(
     viewsOf: (id) => viewsBy.get(id) ?? [],
     rowsOf: (id, inTrash) => (inTrash ? ownLive : rows).get(id) ?? [],
     row: (id) => rowById.get(id),
+    templatesOf: (id) => templates.get(id) ?? [],
     linking,
     isOrphanRow: (id) => orphans.has(id),
   };

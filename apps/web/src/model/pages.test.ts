@@ -12,6 +12,7 @@ const page = (id: string, over: Partial<Page> = {}): Page => ({
   deleted: false,
   createdAt: 0,
   databaseId: null,
+  isTemplate: false,
   ...over,
 });
 
