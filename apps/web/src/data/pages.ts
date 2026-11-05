@@ -53,12 +53,18 @@ export async function deletePermanently(store: LocalStore, index: PageIndex, id:
   if (!index.isTrashed(id)) throw new Error('Only pages in the trash can be deleted permanently.');
   const ids = [id, ...index.descendants(id).map((p) => p.id)];
   const blocks = await store.db.block.where('pageId').anyOf(ids).primaryKeys();
-  // Databases owned by these pages go too. Their rows are below the owner page, so they are in ids.
+  // Databases owned by these pages go too, with their properties and views. Their rows are below
+  // the owner page, so they are in ids. A relation's pair in another database goes as well.
   const databases = await store.db.database.where('pageId').anyOf(ids).primaryKeys();
+  const props = await store.db.property.where('databaseId').anyOf(databases).toArray();
+  const propIds = new Set(props.flatMap((p) => [p.id, ...(p.type === 'relation' && p.config?.pairId ? [p.config.pairId] : [])]));
+  const views = await store.db.view.where('databaseId').anyOf(databases).primaryKeys();
   await store.writeMany([
     ...ids.map((pid) => ({ entity: 'page', id: pid, fields: { deleted: true } })),
     ...blocks.map((bid) => ({ entity: 'block', id: bid, fields: { deleted: true } })),
     ...databases.map((did) => ({ entity: 'database', id: did, fields: { deleted: true } })),
+    ...[...propIds].map((pid) => ({ entity: 'property', id: pid, fields: { deleted: true } })),
+    ...views.map((vid) => ({ entity: 'view', id: vid, fields: { deleted: true } })),
   ]);
 }
 

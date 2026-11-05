@@ -42,6 +42,9 @@ export const databaseBlock = createReactBlockSpec(
         <InlineDatabase databaseId={block.props.databaseId} readOnly={!editor.isEditable} />
       </div>
     ),
+    // Copy and export: a plain marker. The live table needs the app's data context, which a
+    // separate render for the clipboard does not have.
+    toExternalHTML: () => <p>[Database]</p>,
   },
 );
 

@@ -245,3 +245,26 @@ test('database: inline database inside a page, with a list view', async ({ page 
   await editor.getByRole('tab', { name: /Tabel/ }).click();
   await expect(cell(page, 'Catatan', row)).toHaveText('yang tebal');
 });
+
+test('database: numbers edit without thousands separators, and a trashed row keeps its values', async ({ page }) => {
+  await login(page);
+  await createDatabase(page, unique('Biaya'));
+  await addProperty(page, 'Angka', 'Harga');
+  const row = unique('Sewa');
+  const rowId = await addRow(page, row);
+
+  await fillCell(page, 'Harga', row, '1234');
+  await expect(cell(page, 'Harga', row)).toHaveText('1.234');
+  await cell(page, 'Harga', row).click();
+  const input = page.getByRole('textbox', { name: `Harga: ${row}` });
+  await expect(input).toHaveValue('1234');
+  await input.fill('1235');
+  await input.press('Enter');
+  await expect(cell(page, 'Harga', row)).toHaveText('1.235');
+
+  await page.getByRole('button', { name: `Hapus baris ${row}` }).click();
+  await expect(page.getByRole('button', { name: `Judul baris ${row}` })).toHaveCount(0);
+  await gotoStable(page, `/p/${rowId}`);
+  await expect(page.getByText('Halaman ini ada di trash.')).toBeVisible();
+  await expect(cell(page.getByRole('region', { name: 'Properti' }), 'Harga', row)).toHaveText('1.235');
+});

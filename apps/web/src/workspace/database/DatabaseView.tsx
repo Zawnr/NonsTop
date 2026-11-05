@@ -28,7 +28,8 @@ export function DatabaseView({ databaseId, readOnly }: { databaseId: string; rea
   };
   const properties = databases.propertiesOf(databaseId);
   const visible = properties.filter((p) => !p.hidden);
-  const rows = databases.rowsOf(databaseId);
+  // In the trash (read-only), still show the rows so the user can check them before restoring.
+  const rows = databases.rowsOf(databaseId, readOnly);
   const newRow = async () => {
     const id = await addRow(store, databases, databaseId);
     // The full row page is where a new entry gets its content (F-14).

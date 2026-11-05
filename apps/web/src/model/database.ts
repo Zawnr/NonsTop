@@ -91,9 +91,17 @@ export interface DatabaseIndex {
   propertiesOf: (databaseId: string) => Property[];
   property: (id: string) => Property | undefined;
   viewsOf: (databaseId: string) => View[];
-  /** Live, untrashed rows in display order. */
-  rowsOf: (databaseId: string) => Row[];
+  /**
+   * Rows in display order, without trashed ones. `inTrash` is for a database whose owner page is in
+   * the trash: it then lists the rows that are not trashed themselves, so the contents stay visible.
+   */
+  rowsOf: (databaseId: string, inTrash?: boolean) => Row[];
+  /** Any live row by id, trashed ones included (a trashed row page still shows its values). */
   row: (id: string) => Row | undefined;
+  /** Rows whose forward relation property `propertyId` contains `rowId`. Built once per index. */
+  linking: (propertyId: string, rowId: string) => Row[];
+  /** A page is a row of a database that no longer exists (deleted inline database). */
+  isOrphanRow: (pageId: string) => boolean;
 }
 
 /**
@@ -132,15 +140,41 @@ export function indexDatabases(
 
   const records = new Map(pageRecords.map((r) => [r.id, r]));
   const rows = new Map<string, Row[]>();
+  const ownLive = new Map<string, Row[]>();
   const rowById = new Map<string, Row>();
+  const orphans = new Set<string>();
+  const push = (map: Map<string, Row[]>, key: string, row: Row) => {
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(row);
+  };
   for (const p of pages.byId.values()) {
-    if (!p.databaseId || !byId.has(p.databaseId) || pages.isTrashed(p.id)) continue;
+    if (!p.databaseId) continue;
+    if (!byId.has(p.databaseId)) {
+      orphans.add(p.id);
+      continue;
+    }
     const row: Row = { ...p, values: (records.get(p.id) ?? {}) as Record<string, unknown> };
     rowById.set(p.id, row);
-    if (!rows.has(p.databaseId)) rows.set(p.databaseId, []);
-    rows.get(p.databaseId)!.push(row);
+    if (p.trashedAt === null) push(ownLive, p.databaseId, row);
+    if (!pages.isTrashed(p.id)) push(rows, p.databaseId, row);
   }
-  for (const l of rows.values()) l.sort(bySortKey);
+  for (const l of [...rows.values(), ...ownLive.values()]) l.sort(bySortKey);
+
+  // Reverse relation lookups, built on first use per forward property.
+  const linkCache = new Map<string, Map<string, Row[]>>();
+  const linking = (propertyId: string, rowId: string): Row[] => {
+    let map = linkCache.get(propertyId);
+    if (!map) {
+      map = new Map();
+      const prop = propById.get(propertyId);
+      const field = propField(propertyId);
+      for (const r of prop ? (rows.get(prop.databaseId) ?? []) : []) {
+        for (const id of new Set(storedIds(r.values[field]))) push(map, id, r);
+      }
+      linkCache.set(propertyId, map);
+    }
+    return map.get(rowId) ?? [];
+  };
 
   return {
     byId,
@@ -148,8 +182,10 @@ export function indexDatabases(
     propertiesOf: (id) => props.get(id) ?? [],
     property: (id) => propById.get(id),
     viewsOf: (id) => viewsBy.get(id) ?? [],
-    rowsOf: (id) => rows.get(id) ?? [],
+    rowsOf: (id, inTrash) => (inTrash ? ownLive : rows).get(id) ?? [],
     row: (id) => rowById.get(id),
+    linking,
+    isOrphanRow: (id) => orphans.has(id),
   };
 }
 
@@ -223,13 +259,13 @@ export function relatedRows(db: DatabaseIndex, prop: Property, row: Row): Row[] 
   if (!target) return [];
   if (prop.config.reverse) {
     const pair = prop.config.pairId ? db.property(prop.config.pairId) : undefined;
-    if (!pair) return [];
-    const field = propField(pair.id);
-    return db.rowsOf(target).filter((r) => storedIds(r.values[field]).includes(row.id));
+    if (!pair || pair.databaseId !== target) return [];
+    return db.linking(pair.id, row.id);
   }
+  const visible = new Set(db.rowsOf(target).map((r) => r.id));
   return storedIds(row.values[propField(prop.id)])
-    .map((id) => db.row(id))
-    .filter((r): r is Row => r !== undefined && r.databaseId === target);
+    .filter((id) => visible.has(id))
+    .map((id) => db.row(id)!);
 }
 
 export interface ValueWrite {
@@ -286,7 +322,13 @@ export const isEmpty = (cell: CellValue) =>
 
 export const formatNumber = (n: number) => n.toLocaleString('id-ID', { maximumFractionDigits: 10 });
 
-/** Parses a number typed by the user. Accepts "1.5", "1,5" and "1.000,5" (Indonesian). Null = empty or invalid. */
+/** A number as the user edits it: no thousands separators, decimal comma ("1234,5"). */
+export const editableNumber = (n: number) => String(n).replace('.', ',');
+
+/**
+ * Parses a number typed by the user. Accepts "1.5", "1,5", "1.000,5" (Indonesian), "1,000.5", and
+ * dots as thousands separators when there is more than one ("1.234.567"). Null = empty or invalid.
+ */
 export function parseNumber(text: string): number | null {
   const t = text.trim().replace(/\s/g, '');
   if (!t) return null;
@@ -294,7 +336,9 @@ export function parseNumber(text: string): number | null {
   if (t.includes(',') && t.includes('.')) {
     norm = t.lastIndexOf(',') > t.lastIndexOf('.') ? t.replace(/\./g, '').replace(',', '.') : t.replace(/,/g, '');
   } else if (t.includes(',')) {
-    norm = t.replace(',', '.');
+    norm = (t.match(/,/g)?.length ?? 0) > 1 ? t.replace(/,/g, '') : t.replace(',', '.');
+  } else if ((t.match(/\./g)?.length ?? 0) > 1) {
+    norm = t.replace(/\./g, '');
   }
   if (!/^-?\d*\.?\d+$/.test(norm) && !/^-?\d+\.$/.test(norm)) return null;
   const n = Number(norm);

@@ -1,7 +1,7 @@
 // One property value of one row: shown and edited in place (F-11, F-20). Used by the table and by
 // the property panel of a row page (F-14).
 import { useRef, useState, type ReactNode } from 'react';
-import { optionColors, type Property, type SelectOption } from '@nonstop/shared';
+import { optionColors, propField, type Property, type SelectOption } from '@nonstop/shared';
 import { addRow, newId, setOptions, setRelation, setValue } from '../../data/databases.ts';
 import { useData, useStore } from '../../data/workspace.tsx';
 import {
@@ -9,8 +9,10 @@ import {
   cellValue,
   databaseTitle,
   dateRange,
+  editableNumber,
   formatNumber,
   isEmpty,
+  storedIds,
   parseNumber,
   safeUrl,
   type CellValue,
@@ -38,6 +40,7 @@ export function Cell({ prop, row, readOnly, placeholder }: { prop: Property; row
         <TextInput
           label={label}
           value={cell.value === null ? '' : formatNumber(cell.value)}
+          editValue={cell.value === null ? '' : editableNumber(cell.value)}
           readOnly={readOnly}
           inputMode="decimal"
           placeholder={placeholder}
@@ -79,6 +82,7 @@ function CheckboxCell({ label, value, readOnly, onSave }: { label: string; value
 export function TextInput({
   label,
   value,
+  editValue,
   onSave,
   readOnly,
   inputMode,
@@ -87,6 +91,8 @@ export function TextInput({
 }: {
   label: string;
   value: string;
+  /** Text the input starts with, when it differs from the display (numbers without separators). */
+  editValue?: string;
   onSave: (v: string) => void;
   readOnly?: boolean;
   inputMode?: 'decimal';
@@ -97,13 +103,13 @@ export function TextInput({
   const cancelled = useRef(false);
   if (draft === null) {
     return (
-      <button type="button" className={`cell-btn ${className ?? ''}`} aria-label={label} disabled={readOnly} onClick={() => ((cancelled.current = false), setDraft(value))}>
+      <button type="button" className={`cell-btn ${className ?? ''}`} aria-label={label} disabled={readOnly} onClick={() => ((cancelled.current = false), setDraft(editValue ?? value))}>
         {value || <span className="muted">{placeholder ?? ''}</span>}
       </button>
     );
   }
   const finish = () => {
-    if (!cancelled.current && draft !== value) onSave(draft.trim() === '' ? '' : draft);
+    if (!cancelled.current && draft !== (editValue ?? value)) onSave(draft.trim() === '' ? '' : draft);
     setDraft(null);
   };
   return (
@@ -322,7 +328,8 @@ function RelationPicker({ prop, row, cell }: { prop: Property; row: Row; cell: E
     setQuery('');
     // The new row is not in this render's index yet, so link it on the side that needs no lookup.
     if (prop.config.reverse && prop.config.pairId) await setValue(store, id, prop.config.pairId, [row.id]);
-    else await setValue(store, row.id, prop.id, [...linked, id]);
+    // Keep every stored id, including links to rows that are trashed or not synced yet.
+    else await setValue(store, row.id, prop.id, [...storedIds(row.values[propField(prop.id)]), id]);
   };
 
   return (

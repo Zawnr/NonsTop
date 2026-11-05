@@ -10,8 +10,7 @@ export function RowProperties({ page, readOnly }: { page: Page; readOnly: boolea
   const { pages, databases } = useData();
   const [showHidden, setShowHidden] = useState(false);
   const db = page.databaseId ? databases.byId.get(page.databaseId) : undefined;
-  // Trashed rows are not in the index, but the page still opens from the trash.
-  const row = databases.row(page.id) ?? (db ? { ...page, values: {} } : undefined);
+  const row = databases.row(page.id);
   if (!db || !row) return null;
   const all = databases.propertiesOf(db.id);
   const hidden = all.filter((p) => p.hidden);

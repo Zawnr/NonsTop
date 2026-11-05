@@ -91,7 +91,7 @@ export function PageView({ index, page }: { index: PageIndex; page: Page }) {
       )}
 
       {fullDatabase ? (
-        <DatabaseView databaseId={fullDatabase.id} readOnly={trashed} />
+        <DatabaseView key={fullDatabase.id} databaseId={fullDatabase.id} readOnly={trashed} />
       ) : (
         <div className="editor" data-testid="editor">
           <Suspense fallback={<p className="muted">Memuat editor…</p>}>

@@ -1,13 +1,14 @@
 // Search (F-51): titles and page text, from local data, so it works offline. Ctrl/Cmd+K opens it.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type MiniSearch from 'minisearch';
-import { useStore } from '../data/workspace.tsx';
+import { useData, useStore } from '../data/workspace.tsx';
 import type { PageIndex } from '../model/pages.ts';
 import { buildSearchIndex, matchRanges, search, searchDocs, type SearchDoc } from '../model/search.ts';
 import { navigate, pagePath } from '../router.ts';
 
 export function SearchDialog({ index, onClose }: { index: PageIndex; onClose: () => void }) {
   const store = useStore();
+  const { databases } = useData();
   const ref = useRef<HTMLDialogElement>(null);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
@@ -15,7 +16,7 @@ export function SearchDialog({ index, onClose }: { index: PageIndex; onClose: ()
   // Built once when the dialog opens: rebuilding on every save while typing elsewhere is wasted work.
   useEffect(() => {
     let cancelled = false;
-    void store.db.block.toArray().then((blocks) => !cancelled && setMs(buildSearchIndex(searchDocs(index, blocks))));
+    void store.db.block.toArray().then((blocks) => !cancelled && setMs(buildSearchIndex(searchDocs(index, blocks, databases.isOrphanRow))));
     return () => {
       cancelled = true;
     };

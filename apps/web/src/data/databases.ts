@@ -138,3 +138,19 @@ export async function addView(store: LocalStore, index: DatabaseIndex, databaseI
 
 export const renameView = (store: LocalStore, id: string, name: string) => store.write('view', id, { name });
 export const deleteView = (store: LocalStore, id: string) => store.write('view', id, { deleted: true });
+
+/**
+ * Removing an inline database block deletes its database (its rows then leave search). Bringing the
+ * block back (undo, paste) restores it. Only databases owned by this page are touched, so a block
+ * pasted from another page can never delete that page's database.
+ */
+export async function syncInlineDatabases(store: LocalStore, pageId: string, before: Set<string>, after: Set<string>) {
+  const changed: [string, boolean][] = [...before].filter((id) => !after.has(id)).map((id) => [id, true]);
+  changed.push(...[...after].filter((id) => !before.has(id)).map((id): [string, boolean] => [id, false]));
+  if (!changed.length) return;
+  const records = await store.db.database.bulkGet(changed.map(([id]) => id));
+  const writes = changed
+    .filter(([, deleted], i) => records[i]?.pageId === pageId && (records[i]?.deleted ?? false) !== deleted)
+    .map(([id, deleted]) => ({ entity: 'database', id, fields: { deleted } }));
+  if (writes.length) await store.writeMany(writes);
+}

@@ -12,7 +12,8 @@ export function PropertyMenu({ prop, anchor, onClose }: { prop: Property; anchor
   const store = useStore();
   const { pages, databases } = useData();
   const [name, setName] = useState(prop.name);
-  const list = databases.propertiesOf(prop.databaseId);
+  // Steps count only the columns the user sees, so a hidden column in between never eats a click.
+  const list = databases.propertiesOf(prop.databaseId).filter((p) => p.hidden === prop.hidden);
   const left = moveKey(list, prop.id, -1);
   const right = moveKey(list, prop.id, 1);
   const target = prop.config.databaseId ? databases.byId.get(prop.config.databaseId) : undefined;

@@ -5,6 +5,7 @@ import {
   cellText,
   cellValue,
   dateRange,
+  editableNumber,
   defaultConfig,
   indexDatabases,
   moveKey,
@@ -124,6 +125,12 @@ describe('indexDatabases', () => {
     expect(index.fullPageOf('D')?.id).toBe('db1');
   });
 
+  it('marks rows of a missing database as orphans', () => {
+    const { index } = build([page('D'), page('r1', { parentId: 'D', databaseId: 'gone' })], [db('db1', 'D')]);
+    expect(index.isOrphanRow('r1')).toBe(true);
+    expect(index.row('r1')).toBeUndefined();
+  });
+
   it('drops databases whose owner page is deleted', () => {
     const { index } = build([page('D', { deleted: true })], [db('db1', 'D')]);
     expect(index.byId.size).toBe(0);
@@ -210,6 +217,8 @@ describe('helpers', () => {
     expect(parseNumber('1.000,25')).toBe(1000.25);
     expect(parseNumber('1,000.25')).toBe(1000.25);
     expect(parseNumber('-3')).toBe(-3);
+    expect(parseNumber('1.234.567')).toBe(1234567);
+    expect(parseNumber(editableNumber(1234.5))).toBe(1234.5);
     expect(parseNumber('')).toBeNull();
     expect(parseNumber('abc')).toBeNull();
   });
