@@ -1,5 +1,5 @@
 // Property management (F-13): add, rename, reorder, hide, delete, and edit options with colors.
-import { useState } from 'react';
+import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { optionColors, propertyTypes, statusGroups, type Property, type PropertyType, type SelectOption, type StatusGroup } from '@nonstop/shared';
 import { addProperty, deleteProperty, movePropertyTo, newId, renameProperty, setOptions, setPropertyHidden } from '../../data/databases.ts';
 import { useData, useStore } from '../../data/workspace.tsx';
@@ -38,9 +38,10 @@ export function PropertyMenu({ prop, anchor, onClose }: { prop: Property; anchor
             value={name}
             maxLength={100}
             autoFocus
+            enterKeyHint="done"
             onChange={(e) => setName(e.target.value)}
             onBlur={rename}
-            onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), rename())}
+            onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), e.currentTarget.blur())}
           />
         </label>
         <p className="muted">
@@ -71,13 +72,21 @@ export function PropertyMenu({ prop, anchor, onClose }: { prop: Property; anchor
 function OptionsEditor({ prop }: { prop: Property }) {
   const store = useStore();
   const options = prop.config.options ?? [];
+  // The option just added: its name input takes focus so the user can type the name at once.
+  const [added, setAdded] = useState<string | null>(null);
   const save = (next: SelectOption[]) => void setOptions(store, prop, next);
   const update = (id: string, patch: Partial<SelectOption>) => save(options.map((o) => (o.id === id ? { ...o, ...patch } : o)));
-  const add = () =>
+  const add = () => {
+    const id = newId();
+    setAdded(id);
     save([
       ...options,
-      { id: newId(), name: `Opsi ${options.length + 1}`, color: optionColors[options.length % optionColors.length]!, ...(prop.type === 'status' ? { group: 'todo' as const } : {}) },
+      { id, name: `Opsi ${options.length + 1}`, color: optionColors[options.length % optionColors.length]!, ...(prop.type === 'status' ? { group: 'todo' as const } : {}) },
     ]);
+  };
+  // A press on a button would take focus from the name being typed and drop the phone keyboard,
+  // only for the next name input to raise it again. Keep focus where it is instead.
+  const keepFocus = (e: MouseEvent) => e.preventDefault();
 
   return (
     <fieldset className="options">
@@ -85,7 +94,7 @@ function OptionsEditor({ prop }: { prop: Property }) {
       <ul>
         {options.map((o) => (
           <li key={o.id}>
-            <OptionName option={o} onSave={(name) => update(o.id, { name })} />
+            <OptionName option={o} focus={o.id === added} onSave={(name) => update(o.id, { name })} />
             <select aria-label={`Warna ${o.name}`} value={o.color} onChange={(e) => update(o.id, { color: e.target.value as SelectOption['color'] })} className={`c-${o.color}`}>
               {optionColors.map((c) => (
                 <option key={c} value={c}>
@@ -102,30 +111,38 @@ function OptionsEditor({ prop }: { prop: Property }) {
                 ))}
               </select>
             )}
-            <button type="button" className="icon" aria-label={`Hapus opsi ${o.name}`} onClick={() => save(options.filter((x) => x.id !== o.id))}>
+            <button type="button" className="icon" aria-label={`Hapus opsi ${o.name}`} onMouseDown={keepFocus} onClick={() => save(options.filter((x) => x.id !== o.id))}>
               ✕
             </button>
           </li>
         ))}
       </ul>
-      <button type="button" className="ghost" onClick={add}>
+      <button type="button" className="ghost" onMouseDown={keepFocus} onClick={add}>
         + Opsi
       </button>
     </fieldset>
   );
 }
 
-function OptionName({ option, onSave }: { option: SelectOption; onSave: (name: string) => void }) {
+function OptionName({ option, focus, onSave }: { option: SelectOption; focus?: boolean; onSave: (name: string) => void }) {
   const [value, setValue] = useState(option.name);
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!focus) return;
+    ref.current?.focus();
+    ref.current?.select(); // typing replaces the default "Opsi N"
+  }, [focus]);
   const commit = () => value.trim() && value !== option.name && onSave(value.trim());
   return (
     <input
+      ref={ref}
       aria-label={`Nama opsi ${option.name}`}
       value={value}
       maxLength={100}
+      enterKeyHint="done"
       onChange={(e) => setValue(e.target.value)}
       onBlur={commit}
-      onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), commit())}
+      onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), e.currentTarget.blur())}
     />
   );
 }
@@ -167,7 +184,7 @@ export function AddPropertyMenu({ databaseId, anchor, onClose }: { databaseId: s
         <form className="pop-form" onSubmit={(e) => (e.preventDefault(), void submit())}>
           <label>
             Nama properti ({TYPE_LABELS[type]})
-            <input value={name} placeholder={TYPE_LABELS[type]} maxLength={100} autoFocus onChange={(e) => setName(e.target.value)} />
+            <input value={name} placeholder={TYPE_LABELS[type]} maxLength={100} autoFocus enterKeyHint="done" onChange={(e) => setName(e.target.value)} />
           </label>
           {type === 'relation' && (
             <label>

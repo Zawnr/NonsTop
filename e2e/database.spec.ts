@@ -24,15 +24,23 @@ async function addProperty(page: Page, type: string, name: string, target?: stri
   await expect(table(page).getByRole('columnheader', { name, exact: true })).toBeVisible();
 }
 
-/** Adds a row from the table: "+ Baris baru" opens the row page; set its title and go back. */
+/** Adds a row from the table: "+ Baris baru" adds it in place with its title open for typing.
+ *  Returns the row's page id, read from its open link. */
 async function addRow(page: Page, title: string): Promise<string> {
   const before = page.url();
-  const id = await opensNewPage(page, () => page.getByRole('button', { name: '+ Baris baru' }).click());
-  await page.getByLabel('Judul halaman').fill(title);
-  await page.getByLabel('Judul halaman').press('Enter');
+  await page.getByRole('button', { name: '+ Baris baru' }).click();
+  const input = table(page).getByRole('textbox', { name: 'Judul baris Tanpa judul' });
+  await expect(input).toBeFocused();
+  await input.fill(title);
+  await input.press('Enter');
+  await expect(table(page).getByRole('button', { name: `Judul baris ${title}` })).toBeVisible();
+  await expect(page).toHaveURL(before);
+  await table(page).getByRole('button', { name: `Buka ${title}`, exact: true }).click();
+  await expect(page).toHaveURL(/\/p\//);
+  await expect(page.getByLabel('Judul halaman')).toHaveValue(title);
+  const id = page.url().split('/p/')[1]!;
   await page.goBack();
   await expect(page).toHaveURL(before);
-  await expect(table(page).getByRole('button', { name: `Judul baris ${title}` })).toBeVisible();
   return id;
 }
 
@@ -140,6 +148,9 @@ test('database: properties are renamed, reordered, hidden, deleted, and options 
   // Rename and move left.
   await table(page).getByRole('button', { name: 'Biaya', exact: true }).click();
   let menu = page.getByRole('dialog', { name: 'Properti Biaya' });
+  // On a touch screen the menu opens without raising the keyboard; a tap on the field does.
+  if (test.info().project.name === 'android') await expect(menu.getByLabel('Nama properti')).not.toBeFocused();
+  else await expect(menu.getByLabel('Nama properti')).toBeFocused();
   await menu.getByLabel('Nama properti').fill('Harga');
   await menu.getByLabel('Nama properti').press('Enter');
   await menu.getByRole('button', { name: '← Geser kiri' }).click();
@@ -150,6 +161,13 @@ test('database: properties are renamed, reordered, hidden, deleted, and options 
   await table(page).getByRole('button', { name: 'Jenis', exact: true }).click();
   menu = page.getByRole('dialog', { name: 'Properti Jenis' });
   await menu.getByLabel('Warna Ide').selectOption('green');
+  // "+ Opsi" moves focus straight to the new option's name, so a phone keyboard stays up.
+  await menu.getByLabel('Nama opsi Ide').click();
+  await menu.getByRole('button', { name: '+ Opsi' }).click();
+  await expect(menu.getByLabel('Nama opsi Opsi 2')).toBeFocused();
+  await page.keyboard.type('Tugas');
+  await page.keyboard.press('Enter');
+  await expect(menu.getByLabel('Nama opsi Tugas')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(cell(page, 'Jenis', row).locator('.chip')).toHaveClass(/c-green/);
 
@@ -222,6 +240,24 @@ test('database: inline database inside a page, with a list view', async ({ page 
   const db = editor.locator('.inline-db');
   await expect(db.getByRole('table')).toBeVisible();
 
+  // No editor selection overlay on the table, and on phones the database lines up with the title
+  // without making the page scroll sideways.
+  await db.getByRole('table').click({ position: { x: 5, y: 5 } });
+  const block = editor.locator(".bn-block-content[data-content-type='database'] > *");
+  const overlay = await block.evaluate((el) => {
+    el.parentElement!.classList.add('ProseMirror-selectednode');
+    const content = getComputedStyle(el, '::after').content;
+    el.parentElement!.classList.remove('ProseMirror-selectednode');
+    return content;
+  });
+  expect(overlay).toBe('none');
+  await page.screenshot({ path: `test-results/inline-db-${test.info().project.name}.png` });
+  if (test.info().project.name === 'android') {
+    const [box, title] = await Promise.all([db.boundingBox(), page.getByLabel('Judul halaman').boundingBox()]);
+    expect(Math.abs(box!.x - title!.x)).toBeLessThan(4);
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+
   await db.getByRole('button', { name: 'Judul database' }).click();
   await db.getByRole('textbox', { name: 'Judul database' }).fill('Barang bawaan');
   await db.getByRole('textbox', { name: 'Judul database' }).press('Enter');
@@ -262,8 +298,16 @@ test('database: numbers edit without thousands separators, and a trashed row kee
   await input.press('Enter');
   await expect(cell(page, 'Harga', row)).toHaveText('1.235');
 
-  await page.getByRole('button', { name: `Hapus baris ${row}` }).click();
-  await expect(page.getByRole('button', { name: `Judul baris ${row}` })).toHaveCount(0);
+  if (test.info().project.name === 'android') {
+    // Phones delete a row from its page; the table keeps the title column free of the trash icon.
+    await expect(page.getByRole('button', { name: `Hapus baris ${row}` })).toBeHidden();
+    await table(page).getByRole('button', { name: `Buka ${row}`, exact: true }).click();
+    await page.getByRole('button', { name: 'Hapus', exact: true }).click();
+    await expect(page).not.toHaveURL(/\/p\//);
+  } else {
+    await page.getByRole('button', { name: `Hapus baris ${row}` }).click();
+    await expect(page.getByRole('button', { name: `Judul baris ${row}` })).toHaveCount(0);
+  }
   await gotoStable(page, `/p/${rowId}`);
   await expect(page.getByText('Halaman ini ada di trash.')).toBeVisible();
   await expect(cell(page.getByRole('region', { name: 'Properti' }), 'Harga', row)).toHaveText('1.235');

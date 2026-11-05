@@ -327,3 +327,18 @@ button.small { justify-self: start; min-height: 32px; padding: 0.125rem 0.5rem; 
 .pop-form .row input { flex: 1; width: auto; }
 .options li select { flex: none; width: auto; max-width: 6.5rem; }
 .cell-btn .muted { font-weight: 400; }
+
+/* Inline database in the editor: tapping it selects the whole block, and the editor's blue
+   selection overlay then covers the table. The table has its own focus and edit states. */
+.editor .bn-block-content[data-content-type='database'] > *::after { content: none; }
+.popover:focus { outline: none; }
+
+@media (max-width: 767px) {
+  /* Phones: the inline database lines up with the page title and uses the editor's left gutter,
+     which only holds the drag handle on desktop. */
+  .editor .inline-db { margin-left: -1.25rem; width: calc(100% + 1.25rem); }
+  /* Rows are deleted from the row page on phones, so the title keeps room for its text. */
+  .title-cell .open-row.del-row { display: none; }
+  /* Text under 16px makes iOS zoom into the field on focus. */
+  input, select, textarea, .cell-input, .pop-search { font-size: 16px; }
+}

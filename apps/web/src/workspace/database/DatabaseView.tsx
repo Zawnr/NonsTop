@@ -30,10 +30,14 @@ export function DatabaseView({ databaseId, readOnly }: { databaseId: string; rea
   const visible = properties.filter((p) => !p.hidden);
   // In the trash (read-only), still show the rows so the user can check them before restoring.
   const rows = databases.rowsOf(databaseId, readOnly);
+  const table = !view || view.type === 'table';
+  // The row just added from this table: its title opens for typing in place.
+  const [newRowId, setNewRowId] = useState<string | null>(null);
   const newRow = async () => {
     const id = await addRow(store, databases, databaseId);
-    // The full row page is where a new entry gets its content (F-14).
-    navigate(pagePath(id));
+    // A list has no editable cells, so a new entry gets its title on the row page (F-14).
+    if (table) setNewRowId(id);
+    else navigate(pagePath(id));
   };
 
   return (
@@ -44,8 +48,8 @@ export function DatabaseView({ databaseId, readOnly }: { databaseId: string; rea
         </div>
       )}
       <ViewTabs databaseId={databaseId} views={views} current={view} onChoose={choose} readOnly={readOnly} />
-      {!view || view.type === 'table' ? (
-        <TableView databaseId={databaseId} properties={visible} rows={rows} readOnly={readOnly} />
+      {table ? (
+        <TableView databaseId={databaseId} properties={visible} rows={rows} readOnly={readOnly} newRowId={newRowId} />
       ) : (
         <ListView properties={visible} rows={rows} />
       )}
@@ -130,7 +134,7 @@ function ViewTabs({ databaseId, views, current, onChoose, readOnly }: { database
   );
 }
 
-function TableView({ databaseId, properties, rows, readOnly }: { databaseId: string; properties: Property[]; rows: Row[]; readOnly?: boolean }) {
+function TableView({ databaseId, properties, rows, readOnly, newRowId }: { databaseId: string; properties: Property[]; rows: Row[]; readOnly?: boolean; newRowId?: string | null }) {
   const store = useStore();
   const [menu, setMenu] = useState<{ id: string | 'add'; anchor: HTMLElement } | null>(null);
   const editing = menu && menu.id !== 'add' ? properties.find((p) => p.id === menu.id) : undefined;
@@ -163,12 +167,12 @@ function TableView({ databaseId, properties, rows, readOnly }: { databaseId: str
             <tr key={row.id}>
               <th scope="row" className="col-title">
                 <span className="title-cell">
-                  <TextInput label={`Judul baris ${row.title || UNTITLED}`} value={row.title} placeholder={UNTITLED} readOnly={readOnly} onSave={(t) => void renamePage(store, row.id, t)} />
+                  <TextInput label={`Judul baris ${row.title || UNTITLED}`} value={row.title} placeholder={UNTITLED} readOnly={readOnly} autoEdit={row.id === newRowId} onSave={(t) => void renamePage(store, row.id, t)} />
                   <button type="button" className="icon open-row" aria-label={`Buka ${row.title || UNTITLED}`} onClick={() => navigate(pagePath(row.id))}>
                     ↗
                   </button>
                   {!readOnly && (
-                    <button type="button" className="icon open-row" aria-label={`Hapus baris ${row.title || UNTITLED}`} onClick={() => void trashPage(store, row.id)}>
+                    <button type="button" className="icon open-row del-row" aria-label={`Hapus baris ${row.title || UNTITLED}`} onClick={() => void trashPage(store, row.id)}>
                       🗑
                     </button>
                   )}

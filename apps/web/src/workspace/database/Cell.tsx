@@ -1,6 +1,6 @@
 // One property value of one row: shown and edited in place (F-11, F-20). Used by the table and by
 // the property panel of a row page (F-14).
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { optionColors, propField, type Property, type SelectOption } from '@nonstop/shared';
 import { addRow, newId, setOptions, setRelation, setValue } from '../../data/databases.ts';
 import { useData, useStore } from '../../data/workspace.tsx';
@@ -88,6 +88,7 @@ export function TextInput({
   inputMode,
   className,
   placeholder,
+  autoEdit,
 }: {
   label: string;
   value: string;
@@ -98,9 +99,17 @@ export function TextInput({
   inputMode?: 'decimal';
   className?: string;
   placeholder?: string;
+  /** Opens the input as soon as this becomes true (a row just added from the table). */
+  autoEdit?: boolean;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
   const cancelled = useRef(false);
+  useEffect(() => {
+    if (!autoEdit || readOnly) return;
+    cancelled.current = false;
+    setDraft(editValue ?? value);
+    // Only the switch to true opens the input; later value changes must not reopen it.
+  }, [autoEdit]);
   if (draft === null) {
     return (
       <button type="button" className={`cell-btn ${className ?? ''}`} aria-label={label} disabled={readOnly} onClick={() => ((cancelled.current = false), setDraft(editValue ?? value))}>
@@ -119,6 +128,7 @@ export function TextInput({
       autoFocus
       value={draft}
       inputMode={inputMode}
+      enterKeyHint="done"
       maxLength={10_000}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={finish}
@@ -283,7 +293,7 @@ function OptionPicker({ prop, row, cell }: { prop: Property; row: Row; cell: Ext
         aria-label="Cari opsi"
         value={query}
         maxLength={100}
-        autoFocus
+        enterKeyHint="done"
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={(e) => {
           if (e.key !== 'Enter') return;
@@ -335,7 +345,7 @@ function RelationPicker({ prop, row, cell }: { prop: Property; row: Row; cell: E
   return (
     <div className="pop-list">
       <p className="muted pop-head">Tautkan ke {databaseTitle(target, pages)}</p>
-      <input className="pop-search" placeholder="Cari baris…" aria-label="Cari baris" value={query} autoFocus onChange={(e) => setQuery(e.target.value)} />
+      <input className="pop-search" placeholder="Cari baris…" aria-label="Cari baris" value={query} enterKeyHint="search" onChange={(e) => setQuery(e.target.value)} />
       <ul role="listbox" aria-label="Baris" aria-multiselectable>
         {rows.map((r) => (
           <li key={r.id} className="pop-rel">
