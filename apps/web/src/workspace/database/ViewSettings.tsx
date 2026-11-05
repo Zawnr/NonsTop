@@ -219,9 +219,10 @@ function PropertiesMenu({ view, properties, anchor, onClose }: { view: View; pro
         <p className="muted pop-head">Tampil di view ini</p>
         {properties.map((p) => (
           <label key={p.id} className="check-row">
+            {/* Uncontrolled: the box flips at once, the stored list follows a moment later. */}
             <input
               type="checkbox"
-              checked={shown.has(p.id)}
+              defaultChecked={shown.has(p.id)}
               onChange={(e) => void updateView(store, view.id, { hiddenProps: hiddenAfter(view, properties, p.id, !e.target.checked) })}
             />
             {p.name || 'Tanpa nama'}
