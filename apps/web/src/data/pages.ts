@@ -14,6 +14,7 @@ export async function createPage(store: LocalStore, index: PageIndex, parentId: 
     trashedAt: null,
     deleted: false,
     createdAt: Date.now(),
+    databaseId: null,
   };
   await store.write('page', id, page);
   return id;
@@ -52,9 +53,12 @@ export async function deletePermanently(store: LocalStore, index: PageIndex, id:
   if (!index.isTrashed(id)) throw new Error('Only pages in the trash can be deleted permanently.');
   const ids = [id, ...index.descendants(id).map((p) => p.id)];
   const blocks = await store.db.block.where('pageId').anyOf(ids).primaryKeys();
+  // Databases owned by these pages go too. Their rows are below the owner page, so they are in ids.
+  const databases = await store.db.database.where('pageId').anyOf(ids).primaryKeys();
   await store.writeMany([
     ...ids.map((pid) => ({ entity: 'page', id: pid, fields: { deleted: true } })),
     ...blocks.map((bid) => ({ entity: 'block', id: bid, fields: { deleted: true } })),
+    ...databases.map((did) => ({ entity: 'database', id: did, fields: { deleted: true } })),
   ]);
 }
 

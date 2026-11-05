@@ -11,6 +11,7 @@ const page = (id: string, over: Partial<Page> = {}): Page => ({
   trashedAt: null,
   deleted: false,
   createdAt: 0,
+  databaseId: null,
   ...over,
 });
 
