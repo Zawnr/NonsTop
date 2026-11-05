@@ -19,8 +19,11 @@ export interface SearchHit {
   terms: string[];
 }
 
-/** One document per live page: its title and the text of all its blocks. Trashed pages are left out. */
-export function searchDocs(index: PageIndex, blocks: Stored<Block>[]): SearchDoc[] {
+/**
+ * One document per live page: its title and the text of all its blocks. Trashed pages are left out,
+ * and so are pages `hidden` names (rows of a deleted database).
+ */
+export function searchDocs(index: PageIndex, blocks: Stored<Block>[], hidden: (id: string) => boolean = () => false): SearchDoc[] {
   const text = new Map<string, string[]>();
   for (const b of blocks) {
     if (b.deleted || !b.pageId) continue;
@@ -30,7 +33,7 @@ export function searchDocs(index: PageIndex, blocks: Stored<Block>[]): SearchDoc
     text.get(b.pageId)!.push(t);
   }
   return [...index.byId.values()]
-    .filter((p) => !index.isTrashed(p.id))
+    .filter((p) => !index.isTrashed(p.id) && !hidden(p.id))
     .map((p) => ({ id: p.id, title: p.title, text: (text.get(p.id) ?? []).join('\n') }));
 }
 

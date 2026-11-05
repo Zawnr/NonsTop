@@ -13,6 +13,7 @@ const page = (id: string, title: string, over: Partial<Page> = {}): Page => ({
   trashedAt: null,
   deleted: false,
   createdAt: 0,
+  databaseId: null,
   ...over,
 });
 const block = (id: string, pageId: string, text: string, over: Partial<Stored<Block>> = {}): Stored<Block> => ({

@@ -1,5 +1,5 @@
 // Local store: writes go to IndexedDB immediately and into the outbox for the next push.
-import { compareHlc, entities, entityNames, HlcClock, type Change, type ClockState, type EntityDef, type FieldOp } from '@nonstop/shared';
+import { compareHlc, entityNames, HlcClock, isClientCreatable, isClientField, type Change, type ClockState, type FieldOp } from '@nonstop/shared';
 import type { NonstopDb, Stored } from './db.ts';
 
 const DEVICE_KEY = 'deviceId';
@@ -153,11 +153,12 @@ export class LocalStore {
       await db.meta.put({ key: EPOCH_KEY, value: epoch });
       if (known === undefined || known === epoch) return false;
       // Conflict records are created by the server, so they are not replayed.
-      for (const entity of ['page', 'block'] as const) {
-        const writable = (entities as Record<string, EntityDef>)[entity]!.clientFields;
-        for (const rec of await db.entityTable(entity)!.toArray()) {
+      for (const entity of entityNames.filter(isClientCreatable)) {
+        const table = db.entityTable(entity);
+        if (!table) continue;
+        for (const rec of await table.toArray()) {
           for (const [field, hlc] of Object.entries(rec._hlc)) {
-            if (!writable.includes(field)) continue;
+            if (!isClientField(entity, field)) continue;
             const value = (rec as Record<string, unknown>)[field];
             await db.outbox.add({
               op: { opId: crypto.randomUUID(), entity, id: rec.id, field, value, hlc, prevHlc: null, replay: true },

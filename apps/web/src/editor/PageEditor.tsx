@@ -12,8 +12,9 @@ import { BlockNoteView } from '@blocknote/ariakit';
 import '@blocknote/ariakit/style.css';
 import { compareHlc, sameValue, type Block } from '@nonstop/shared';
 import type { Stored } from '../data/db.ts';
+import { createInlineDatabase, newId, syncInlineDatabases } from '../data/databases.ts';
 import { useStore } from '../data/workspace.tsx';
-import { buildDocument, diffDocument, liveBlocks, toSnapshot, type DocBlock, type FlatBlock, type Snapshot } from '../model/blocks.ts';
+import { buildDocument, diffDocument, hasNoContent, liveBlocks, toSnapshot, type DocBlock, type FlatBlock, type Snapshot } from '../model/blocks.ts';
 import { schema } from './schema.tsx';
 import { slashMenuItems } from './slash-menu.tsx';
 
@@ -70,9 +71,11 @@ function EditorInner({ pageId, rows, readOnly }: { pageId: string; rows: Stored<
   const save = () => {
     if (timer.current) clearTimeout(timer.current);
     timer.current = null;
-    const { writes, next } = diffDocument(pageId, snapshot.current, editor.document as unknown as DocBlock[]);
+    const before = snapshot.current;
+    const { writes, next } = diffDocument(pageId, before, editor.document as unknown as DocBlock[]);
     snapshot.current = next;
     if (!writes.length) return;
+    void syncInlineDatabases(store, pageId, databaseIds(before), databaseIds(next));
     const ids = writes.map((w) => w.id);
     ids.forEach((id) => writing.current.add(id));
     void store
@@ -181,6 +184,12 @@ function EditorInner({ pageId, rows, readOnly }: { pageId: string; rows: Stored<
     }
   }
 
+  const createDatabase = () => {
+    const id = newId();
+    void createInlineDatabase(store, id, pageId);
+    return id;
+  };
+
   return (
     <BlockNoteView
       editor={editor}
@@ -195,12 +204,19 @@ function EditorInner({ pageId, rows, readOnly }: { pageId: string; rows: Stored<
       }}
       onBlur={() => timer.current && save()}
     >
-      <SuggestionMenuController triggerCharacter="/" getItems={async (query) => filterSuggestionItems(slashMenuItems(editor), query)} />
+      <SuggestionMenuController triggerCharacter="/" getItems={async (query) => filterSuggestionItems(slashMenuItems(editor, createDatabase), query)} />
     </BlockNoteView>
   );
 }
 
+/** Database ids referenced by the inline database blocks of a snapshot. */
+function databaseIds(snapshot: Snapshot): Set<string> {
+  const ids = new Set<string>();
+  for (const b of snapshot.values()) if (b.type === 'database' && typeof b.props.databaseId === 'string' && b.props.databaseId) ids.add(b.props.databaseId);
+  return ids;
+}
+
 function updateIfChanged(ed: { updateBlock: (id: string, b: never) => unknown }, old: FlatBlock | undefined, b: FlatBlock) {
   if (old && old.type === b.type && sameValue(old.props, b.props) && sameValue(old.content, b.content)) return;
-  ed.updateBlock(b.id, { type: b.type, props: b.props, content: b.type === 'divider' ? undefined : b.content } as never);
+  ed.updateBlock(b.id, { type: b.type, props: b.props, content: hasNoContent(b.type) ? undefined : b.content } as never);
 }

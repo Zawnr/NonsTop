@@ -16,6 +16,7 @@ export function normalizePage(rec: Stored<Page>): Page {
     trashedAt: rec.trashedAt ?? null,
     deleted: rec.deleted ?? false,
     createdAt: rec.createdAt ?? 0,
+    databaseId: rec.databaseId ?? null,
   };
 }
 
@@ -110,9 +111,9 @@ export function indexPages(records: Page[]): PageIndex {
   };
 }
 
-/** Pages visible in the sidebar tree under a parent (null = top level). */
+/** Pages visible in the sidebar tree under a parent (null = top level). Database rows are left out. */
 export function visibleChildren(index: PageIndex, parentId: string | null): Page[] {
-  return index.childrenOf(parentId).filter((p) => p.trashedAt === null);
+  return index.childrenOf(parentId).filter((p) => p.trashedAt === null && p.databaseId === null);
 }
 
 export function favorites(index: PageIndex): Page[] {

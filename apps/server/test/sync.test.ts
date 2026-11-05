@@ -303,4 +303,47 @@ describe('two devices', () => {
     await phone.sync(app, cookie);
     expect(phone.conflicts()[0]?.resolved).toBe(true);
   });
+
+  it('syncs property values per property: edits of two properties of one row both survive', async () => {
+    const { app, cookie, laptop, phone, wall } = await setup();
+    laptop.write('page', 'r1', 'databaseId', 'db1');
+    laptop.write('page', 'r1', 'prop.status', 'todo');
+    await laptop.sync(app, cookie);
+    await phone.sync(app, cookie);
+    wall.ms += 1000;
+    laptop.write('page', 'r1', 'prop.status', 'done');
+    phone.write('page', 'r1', 'prop.points', 3);
+    await laptop.sync(app, cookie);
+    await phone.sync(app, cookie);
+    await laptop.sync(app, cookie);
+    for (const d of [laptop, phone]) {
+      expect(d.get('page', 'r1', 'prop.status')).toBe('done');
+      expect(d.get('page', 'r1', 'prop.points')).toBe(3);
+      expect(d.conflicts()).toEqual([]);
+    }
+  });
+
+  it('concurrent edits of one property value keep the other version on the row', async () => {
+    const { app, cookie, laptop, phone, wall } = await setup();
+    laptop.write('page', 'r1', 'prop.note', 'awal');
+    await laptop.sync(app, cookie);
+    await phone.sync(app, cookie);
+    wall.ms += 1000;
+    laptop.write('page', 'r1', 'prop.note', 'laptop');
+    wall.ms += 1000;
+    phone.write('page', 'r1', 'prop.note', 'HP');
+    await laptop.sync(app, cookie);
+    await phone.sync(app, cookie);
+    expect(phone.get('page', 'r1', 'prop.note')).toBe('HP');
+    const [conflict] = phone.conflicts();
+    expect(conflict).toMatchObject({ field: 'prop.note', value: 'laptop' });
+    expect(phone.get('conflict', conflict!.id, 'pageId')).toBe('r1');
+  });
+
+  it('rejects malformed property values', async () => {
+    const { app, cookie } = await setup();
+    const op = (field: string, value: unknown): FieldOp => ({ opId: `op${++opCounter}`, entity: 'page', id: 'r1', field, value, hlc: '0000001000000-0000-x', prevHlc: null });
+    const res = (await (await post(app, '/api/sync/push', { ops: [op('prop.d', { start: 'besok', end: null }), op('prop.ok', 'teks')] }, cookie)).json()) as PushResponse;
+    expect(res.rejected).toHaveLength(1);
+  });
 });

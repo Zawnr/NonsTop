@@ -166,6 +166,16 @@ sequenceDiagram
 - Edit konkuren dideteksi lewat `prevHlc` (versi yang terakhir dilihat perangkat). Nilai yang kalah disimpan sebagai entity `conflict` yang ikut tersinkron, lalu tampil sebagai penanda "Ada versi lain". Untuk sekarang hanya judul halaman yang memunculkan penanda. Field struktur (urutan, parent) tidak.
 - Siklus parent dari pemindahan konkuren diputus saat render: halaman ber-id terkecil di siklus dianggap tingkat atas, sama di semua perangkat.
 
+### Catatan implementasi (sprint 3)
+- Entity sinkron baru: `database` (pageId, inline, title, deleted), `property` (databaseId, name, type, config, sortKey, hidden, deleted), dan `view` (databaseId, name, type table/list, sortKey, deleted). Filter, sort, group, dan properti tampil per view masuk sprint 4.
+- Nilai properti (`PROPERTY_VALUE` di ERD) disimpan sebagai field dinamis halaman baris, `prop.<propertyId>`. Server menyimpannya di `field_state` seperti field lain, jadi LWW tetap per properti dan tidak perlu tabel atau id gabungan. Field ini ikut memunculkan penanda "Ada versi lain".
+- Baris adalah halaman dengan `databaseId`. `parentId` baris = halaman pemilik database (halaman database itu sendiri, atau halaman tempat database inline berada), sehingga trash dan hapus permanen ikut turun. Baris tidak tampil di pohon sidebar dan di daftar sub-halaman.
+- Database penuh: halaman yang punya `database` dengan `pageId` = halaman itu dan `inline = false`. Halamannya menampilkan database, bukan editor. Judulnya memakai judul halaman.
+- Database inline: blok editor `database` dengan prop `databaseId`. Menghapus blok tidak menghapus database dan barisnya, sehingga undo mengembalikannya utuh.
+- Properti judul adalah judul halaman, selalu kolom pertama, dan tidak menjadi entity `property`.
+- Relation dua arah: membuat relation A ke B juga membuat properti balik di B (`config.reverseOf`). Nilai hanya disimpan di sisi asal. Sisi balik dihitung dari indeks di memori. Edit dari sisi balik menulis ke baris asal. Menghapus salah satu menghapus pasangannya.
+- Migrasi client: Dexie versi 3 menambah tabel `database`, `property`, `view`. Daftar entity berubah, jadi kursor pull di-reset dan semua ditarik ulang (mekanisme dari sprint 2).
+
 ### Alur utama
 - **Catatan cepat (F-50):** shortcut PWA "Catatan baru" di launcher Android membuka halaman baru di Inbox dengan kursor siap mengetik.
 - **Pengingat (F-52):** properti date bisa diberi jam pengingat. Scheduler server mengecek tiap menit, mengirim web-push ke semua perangkat terdaftar, dan mencatat yang sudah terkirim agar tidak dobel.

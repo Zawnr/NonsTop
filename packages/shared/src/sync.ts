@@ -27,6 +27,11 @@ export interface EntityDef {
   clientFields: readonly string[];
   /** Clients may create new records. If false, clients can only modify records the server created. */
   clientCreatable: boolean;
+  /**
+   * Fields named `<prefix><id>`, for values keyed by another record (property values of a row).
+   * Client-writable, and they create a conflict marker when `conflict` is set.
+   */
+  dynamicFields?: { prefix: string; schema: z.ZodType; conflict: boolean };
 }
 
 const pageFields = {
@@ -39,7 +44,33 @@ const pageFields = {
   /** Permanent delete. Kept as a tombstone so a late edit cannot bring the page back. */
   deleted: z.boolean(),
   createdAt: timestamp,
+  /** Set when the page is a row of a database (F-14). Rows are hidden from the sidebar tree. */
+  databaseId: id.nullable(),
 };
+
+/** Prefix of a row's property value fields: `prop.<propertyId>`. */
+export const PROP_PREFIX = 'prop.';
+export const propField = (propertyId: string) => `${PROP_PREFIX}${propertyId}`;
+
+/** Date property value (F-11): ISO date `YYYY-MM-DD`, optional end date. */
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+export const dateValue = z.object({ start: isoDate, end: isoDate.nullable() });
+export type DateValue = z.infer<typeof dateValue>;
+
+/**
+ * A property value as stored. The shape per type: text/url/select/status = string, number = number,
+ * checkbox = boolean, multi-select/relation = string[] (option or row ids), date = DateValue.
+ * null = empty. The client checks the shape against the property type; the server checks the union.
+ */
+export const propertyValue = z.union([
+  z.null(),
+  z.string().max(10_000),
+  z.number().finite(),
+  z.boolean(),
+  z.array(z.string().max(64)).max(1000),
+  dateValue,
+]);
+export type PropertyValue = z.infer<typeof propertyValue>;
 
 /** Block types of the editor (F-03). Image and file blocks (F-05) arrive later. */
 export const blockTypes = [
@@ -53,6 +84,8 @@ export const blockTypes = [
   'callout',
   'codeBlock',
   'divider',
+  /** An inline database (F-10). Its `databaseId` prop points to the database record. */
+  'database',
 ] as const;
 export type BlockType = (typeof blockTypes)[number];
 
@@ -69,6 +102,67 @@ const blockFields = {
   ),
   /** Inline content (rich text) as the editor stores it. Last writer wins for the whole block. */
   content: jsonValue,
+  deleted: z.boolean(),
+};
+
+const databaseFields = {
+  /** The page that owns the database: the database page itself, or the page it sits in inline. */
+  pageId: id,
+  inline: z.boolean(),
+  /** Title of an inline database. A full-page database uses its page's title. */
+  title: z.string().max(500),
+  deleted: z.boolean(),
+  createdAt: timestamp,
+};
+
+export const propertyTypes = ['text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url', 'relation'] as const;
+export type PropertyType = (typeof propertyTypes)[number];
+
+export const optionColors = ['gray', 'brown', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'red'] as const;
+export type OptionColor = (typeof optionColors)[number];
+
+/** Status options belong to one of three groups, used by boards and progress (F-21, F-40). */
+export const statusGroups = ['todo', 'doing', 'done'] as const;
+export type StatusGroup = (typeof statusGroups)[number];
+
+const selectOption = z.object({
+  id,
+  name: z.string().max(100),
+  color: z.enum(optionColors),
+  group: z.enum(statusGroups).optional(),
+});
+export type SelectOption = z.infer<typeof selectOption>;
+
+/** Per-type settings. Options for select, multi-select and status; the target for relations. */
+export const propertyConfig = z.object({
+  options: z.array(selectOption).max(200).optional(),
+  /** Relation: the database the values point into. */
+  databaseId: id.optional(),
+  /** Relation: the property on the other side. */
+  pairId: id.optional(),
+  /** Relation: true on the side computed from the other one (values are stored on the pair). */
+  reverse: z.boolean().optional(),
+});
+export type PropertyConfig = z.infer<typeof propertyConfig>;
+
+const propertyFields = {
+  databaseId: id,
+  name: z.string().max(100),
+  type: z.enum(propertyTypes),
+  config: propertyConfig,
+  sortKey,
+  hidden: z.boolean(),
+  deleted: z.boolean(),
+};
+
+export const viewTypes = ['table', 'list'] as const;
+export type ViewType = (typeof viewTypes)[number];
+
+const viewFields = {
+  databaseId: id,
+  name: z.string().max(100),
+  type: z.enum(viewTypes),
+  sortKey,
   deleted: z.boolean(),
 };
 
@@ -92,11 +186,30 @@ export const entities = {
     conflictFields: ['title'],
     clientFields: Object.keys(pageFields),
     clientCreatable: true,
+    dynamicFields: { prefix: PROP_PREFIX, schema: propertyValue, conflict: true },
   },
   block: {
     fields: blockFields,
     conflictFields: ['content'],
     clientFields: Object.keys(blockFields),
+    clientCreatable: true,
+  },
+  database: {
+    fields: databaseFields,
+    conflictFields: ['title'],
+    clientFields: Object.keys(databaseFields),
+    clientCreatable: true,
+  },
+  property: {
+    fields: propertyFields,
+    conflictFields: [],
+    clientFields: Object.keys(propertyFields),
+    clientCreatable: true,
+  },
+  view: {
+    fields: viewFields,
+    conflictFields: [],
+    clientFields: Object.keys(viewFields),
     clientCreatable: true,
   },
   conflict: {
@@ -119,6 +232,39 @@ export interface Page {
   trashedAt: number | null;
   deleted: boolean;
   createdAt: number;
+  databaseId: string | null;
+}
+
+/** A row's property values, keyed by field name (`prop.<propertyId>`). */
+export type PageWithValues = Page & { [field: `prop.${string}`]: PropertyValue | undefined };
+
+export interface Database {
+  id: string;
+  pageId: string;
+  inline: boolean;
+  title: string;
+  deleted: boolean;
+  createdAt: number;
+}
+
+export interface Property {
+  id: string;
+  databaseId: string;
+  name: string;
+  type: PropertyType;
+  config: PropertyConfig;
+  sortKey: string;
+  hidden: boolean;
+  deleted: boolean;
+}
+
+export interface View {
+  id: string;
+  databaseId: string;
+  name: string;
+  type: ViewType;
+  sortKey: string;
+  deleted: boolean;
 }
 
 export interface Block {
@@ -200,12 +346,28 @@ export interface PullResponse {
 
 export type OpCheck = { ok: true } | { ok: false; reason: string };
 
+const entityDef = (entity: string): EntityDef | undefined => (entities as Record<string, EntityDef>)[entity];
+
+/** The dynamic field definition a field name belongs to, if its id part is valid. */
+function dynamicField(def: EntityDef, field: string) {
+  const dyn = def.dynamicFields;
+  if (!dyn || !field.startsWith(dyn.prefix)) return undefined;
+  return id.safeParse(field.slice(dyn.prefix.length)).success ? dyn : undefined;
+}
+
+/** A client may write this field (a listed client field or a valid dynamic field). */
+export function isClientField(entity: string, field: string): boolean {
+  const def = entityDef(entity);
+  if (!def) return false;
+  return def.clientFields.includes(field) || dynamicField(def, field) !== undefined;
+}
+
 /** Checks that a client may write this field and that the value fits its schema. */
 export function checkClientOp(op: FieldOp): OpCheck {
-  const def = (entities as Record<string, EntityDef>)[op.entity];
+  const def = entityDef(op.entity);
   if (!def) return { ok: false, reason: `unknown entity ${op.entity}` };
-  const schema = def.fields[op.field];
-  if (!schema || !def.clientFields.includes(op.field)) {
+  const schema = def.clientFields.includes(op.field) ? def.fields[op.field] : dynamicField(def, op.field)?.schema;
+  if (!schema) {
     return { ok: false, reason: `field ${op.entity}.${op.field} is not writable` };
   }
   if (op.value === undefined || !schema.safeParse(op.value).success) {
@@ -215,9 +377,11 @@ export function checkClientOp(op: FieldOp): OpCheck {
 }
 
 export function isClientCreatable(entity: string): boolean {
-  return (entities as Record<string, EntityDef>)[entity]?.clientCreatable ?? false;
+  return entityDef(entity)?.clientCreatable ?? false;
 }
 
 export function isConflictField(entity: string, field: string): boolean {
-  return ((entities as Record<string, EntityDef>)[entity]?.conflictFields ?? []).includes(field);
+  const def = entityDef(entity);
+  if (!def) return false;
+  return def.conflictFields.includes(field) || dynamicField(def, field)?.conflict === true;
 }
