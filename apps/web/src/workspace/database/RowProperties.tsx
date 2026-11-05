@@ -1,5 +1,5 @@
 // Property panel at the top of a row page (F-14): every property of the row, editable in place.
-import { useState } from 'react';
+// Hiding a property belongs to each view (F-23), so the row page always shows all of them.
 import type { Page } from '@nonstop/shared';
 import { useData } from '../../data/workspace.tsx';
 import { databaseTitle } from '../../model/database.ts';
@@ -8,13 +8,10 @@ import { Cell } from './Cell.tsx';
 
 export function RowProperties({ page, readOnly }: { page: Page; readOnly: boolean }) {
   const { pages, databases } = useData();
-  const [showHidden, setShowHidden] = useState(false);
   const db = page.databaseId ? databases.byId.get(page.databaseId) : undefined;
   const row = databases.row(page.id);
   if (!db || !row) return null;
   const all = databases.propertiesOf(db.id);
-  const hidden = all.filter((p) => p.hidden);
-  const shown = showHidden ? all : all.filter((p) => !p.hidden);
   const owner = db.pageId;
 
   return (
@@ -26,7 +23,7 @@ export function RowProperties({ page, readOnly }: { page: Page; readOnly: boolea
         </a>
       </p>
       <dl>
-        {shown.map((p) => (
+        {all.map((p) => (
           <div key={p.id} className="row-prop">
             <dt>{p.name || 'Tanpa nama'}</dt>
             <dd>
@@ -35,11 +32,6 @@ export function RowProperties({ page, readOnly }: { page: Page; readOnly: boolea
           </div>
         ))}
       </dl>
-      {hidden.length > 0 && (
-        <button type="button" className="ghost small" onClick={() => setShowHidden(!showHidden)}>
-          {showHidden ? 'Sembunyikan properti tersembunyi' : `${hidden.length} properti tersembunyi`}
-        </button>
-      )}
     </section>
   );
 }

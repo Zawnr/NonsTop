@@ -34,13 +34,17 @@ export function DatabaseView({ databaseId, readOnly, onDuplicate }: { databaseId
   const view = views.find((v) => v.id === chosen) ?? views[0];
   const choose = (id: string) => {
     setChosen(id);
+    setNewRowId(null);
     localStorage.setItem(VIEW_KEY + databaseId, id);
   };
   const properties = databases.propertiesOf(databaseId);
   const visible = visibleProperties(view, properties);
   // In the trash (read-only), still show the rows so the user can check them before restoring.
   const all = databases.rowsOf(databaseId, readOnly);
-  const rows = viewRows(databases, view, properties, all);
+  const filtered = viewRows(databases, view, properties, all);
+  // A row just added stays in sight, even when the view's filters would hide it, so the user can name it.
+  const fresh = newRowId && !filtered.some((r) => r.id === newRowId) ? all.find((r) => r.id === newRowId) : undefined;
+  const rows = fresh ? [...filtered, fresh] : filtered;
   const groupProp = view?.groupBy ? properties.find((p) => p.id === view.groupBy && groupable(p, view.type === 'board')) : undefined;
   const templates = databases.templatesOf(databaseId);
   const defaultTemplate = templates.find((t) => t.id === db.defaultTemplateId)?.id ?? null;

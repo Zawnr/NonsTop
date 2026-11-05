@@ -4,8 +4,9 @@ import { useRef, useState } from 'react';
 import { TITLE_PROPERTY, type FilterOp, type Property, type View, type ViewFilter, type ViewSort } from '@nonstop/shared';
 import { updateView } from '../../data/databases.ts';
 import { useData, useStore } from '../../data/workspace.tsx';
+import { parseNumber } from '../../model/database.ts';
 import { UNTITLED } from '../../model/pages.ts';
-import { fieldOf, groupable, hiddenAfter, needsValue, OP_LABELS, opsFor, visibleProperties, type FieldKind } from '../../model/views.ts';
+import { fieldOf, groupable, hiddenProperties, needsValue, OP_LABELS, opsFor, visibleProperties, type FieldKind } from '../../model/views.ts';
 import { Popover } from './Popover.tsx';
 
 type Menu = 'filter' | 'sort' | 'group' | 'props' | null;
@@ -134,13 +135,25 @@ function FilterValue({ index, filter, properties, onChange }: { index: number; f
     }
   }
   const number = field !== undefined && field !== 'title' && field.type === 'number';
-  return <DraftInput key={filter.propertyId} label={label} value={filter.value === null ? '' : String(filter.value)} inputMode={number ? 'decimal' : undefined} onCommit={(t) => onChange(t === '' ? null : number ? Number(t.replace(',', '.')) : t)} />;
+  const value = filter.value === null ? '' : String(filter.value);
+  const commit = (t: string) => {
+    if (t === '' || !number) return onChange(t || null);
+    const n = parseNumber(t);
+    if (n === null) return false;
+    onChange(n);
+  };
+  // Keyed by the stored value: when it changes elsewhere (another filter removed, another device),
+  // the field starts again from it instead of keeping a stale draft.
+  return <DraftInput key={`${filter.propertyId}:${value}`} label={label} value={value} inputMode={number ? 'decimal' : undefined} onCommit={commit} />;
 }
 
-/** A text field that saves on Enter or when it loses focus, not on every key. */
-function DraftInput({ label, value, inputMode, onCommit }: { label: string; value: string; inputMode?: 'decimal'; onCommit: (v: string) => void }) {
+/** A text field that saves on Enter or when it loses focus, not on every key. `onCommit` returning false rejects the text. */
+function DraftInput({ label, value, inputMode, onCommit }: { label: string; value: string; inputMode?: 'decimal'; onCommit: (v: string) => boolean | void }) {
   const [draft, setDraft] = useState(value);
-  const commit = () => draft.trim() !== value && onCommit(draft.trim());
+  const commit = () => {
+    if (draft.trim() === value) return;
+    if (onCommit(draft.trim()) === false) setDraft(value);
+  };
   return (
     <input
       aria-label={label}
@@ -212,19 +225,22 @@ function GroupMenu({ view, properties, anchor, onClose }: { view: View; properti
 
 function PropertiesMenu({ view, properties, anchor, onClose }: { view: View; properties: Property[]; anchor: HTMLElement | null; onClose: () => void }) {
   const store = useStore();
-  const shown = new Set(visibleProperties(view, properties).map((p) => p.id));
+  // The menu keeps its own list, so quick taps build on each other before the stored view catches up.
+  const [hidden, setHidden] = useState(() => new Set(hiddenProperties(view, properties).map((p) => p.id)));
+  const toggle = (id: string, hide: boolean) => {
+    const next = new Set(hidden);
+    if (hide) next.add(id);
+    else next.delete(id);
+    setHidden(next);
+    void updateView(store, view.id, { hiddenProps: properties.filter((p) => next.has(p.id)).map((p) => p.id) });
+  };
   return (
     <Popover anchor={anchor} label="Properti tampil" onClose={onClose}>
       <div className="pop-list">
         <p className="muted pop-head">Tampil di view ini</p>
         {properties.map((p) => (
           <label key={p.id} className="check-row">
-            {/* Uncontrolled: the box flips at once, the stored list follows a moment later. */}
-            <input
-              type="checkbox"
-              defaultChecked={shown.has(p.id)}
-              onChange={(e) => void updateView(store, view.id, { hiddenProps: hiddenAfter(view, properties, p.id, !e.target.checked) })}
-            />
+            <input type="checkbox" checked={!hidden.has(p.id)} onChange={(e) => toggle(p.id, !e.target.checked)} />
             {p.name || 'Tanpa nama'}
           </label>
         ))}

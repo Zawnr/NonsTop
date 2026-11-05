@@ -11,6 +11,7 @@ import { cardKey, groupable, groupRows, groupValue, type RowGroup } from '../../
 import { navigate, pagePath } from '../../router.ts';
 import { CellDisplay, Chip, TextInput } from './Cell.tsx';
 import { Popover } from './Popover.tsx';
+import { pointerY } from '../dnd.ts';
 
 interface Drop {
   column: string | null;
@@ -21,14 +22,6 @@ interface Drop {
 const COLUMN = 'col:';
 const colId = (key: string | null) => COLUMN + (key ?? '');
 const colKey = (id: string): string | null => id.slice(COLUMN.length) || null;
-
-function pointerY(e: DragMoveEvent | DragEndEvent): number | null {
-  const start = e.activatorEvent;
-  let y: number | null = null;
-  if (start instanceof MouseEvent) y = start.clientY;
-  else if (typeof TouchEvent !== 'undefined' && start instanceof TouchEvent) y = start.touches[0]?.clientY ?? null;
-  return y === null ? null : y + e.delta.y;
-}
 
 export function BoardView({
   view,
@@ -59,13 +52,12 @@ export function BoardView({
   if (!prop || !groupable(prop, true)) {
     return <p className="muted db-empty">Pilih properti Status atau Select untuk kolom board lewat tombol “Kolom”.</p>;
   }
-  const columns = groupRows(databases, prop, rows);
+  const columns = groupRows(databases, prop, rows, true);
   const columnOf = (rowId: string) => columns.find((c) => c.rows.some((r) => r.id === rowId));
 
   /** Moves a card to a column, before a card or at the end. The order changes only without sorts. */
   const move = (rowId: string, target: Drop) => {
-    // The "no value" column only exists while it has cards; moving there from the menu still works.
-    const column = columns.find((c) => c.key === target.column) ?? (target.column === null ? { key: null, rows: [] } : undefined);
+    const column = columns.find((c) => c.key === target.column);
     const from = columnOf(rowId);
     if (!column || !from) return;
     const fields: Record<string, unknown> = {};

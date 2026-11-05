@@ -92,6 +92,9 @@ describe('matchesFilter', () => {
   it('ignores filters without a value yet and filters on deleted properties', () => {
     expect(pass(f('st', 'is', null))).toEqual(['r1', 'r2', 'r3']);
     expect(pass(f('gone', 'empty'))).toEqual(['r1', 'r2', 'r3']);
+    // A number filter that is not a number (NaN locally, null after sync) behaves the same everywhere.
+    expect(pass(f('n', 'eq', Number.NaN))).toEqual(['r1', 'r2', 'r3']);
+    expect(pass(f('n', 'eq', 'abc'))).toEqual(['r1', 'r2', 'r3']);
   });
 });
 

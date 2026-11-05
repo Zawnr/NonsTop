@@ -17,6 +17,7 @@ import { createPage, movePage } from '../data/pages.ts';
 import { useStore } from '../data/workspace.tsx';
 import { placeRelative, UNTITLED, visibleChildren, type DropPosition, type PageIndex } from '../model/pages.ts';
 import { navigate, pagePath } from '../router.ts';
+import { pointerY } from './dnd.ts';
 
 const EXPANDED_KEY = 'nonstop:expanded';
 
@@ -46,14 +47,6 @@ function flatten(index: PageIndex, expanded: Set<string>): Row[] {
   };
   walk(null, 0);
   return rows;
-}
-
-function pointerY(e: DragMoveEvent | DragEndEvent): number | null {
-  const start = e.activatorEvent;
-  let y: number | null = null;
-  if (start instanceof MouseEvent) y = start.clientY;
-  else if (typeof TouchEvent !== 'undefined' && start instanceof TouchEvent) y = start.touches[0]?.clientY ?? null;
-  return y === null ? null : y + e.delta.y;
 }
 
 interface Drop {

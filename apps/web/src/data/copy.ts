@@ -8,12 +8,17 @@ import { builtinSource, type BuiltinTemplate } from '../model/templates.ts';
 import { newId } from './databases.ts';
 import type { LocalStore } from './store.ts';
 
-/** Reads the records below `rootIds` (pages, their blocks, databases, properties and views). */
-async function readSource(store: LocalStore, pages: PageIndex, rootIds: string[]): Promise<CopySource> {
+/**
+ * Reads the records below `rootIds`: those pages and their blocks, plus databases, properties and
+ * views (small tables, also needed for relations that point outside the copy). `extraPages` are
+ * read without their blocks or children.
+ */
+async function readSource(store: LocalStore, pages: PageIndex, rootIds: string[], extraPages: string[] = []): Promise<CopySource> {
   const db = store.db;
   const ids = [...new Set(rootIds.flatMap((id) => [id, ...pages.descendants(id).map((p) => p.id)]))];
+  const pageIds = [...new Set([...ids, ...extraPages])];
   return db.transaction('r', [db.page, db.block, db.database, db.property, db.view], async () => ({
-    pages: await db.page.toArray(),
+    pages: (await db.page.bulkGet(pageIds)).filter((p) => p !== undefined),
     blocks: await db.block.where('pageId').anyOf(ids).toArray(),
     databases: (await db.database.toArray()).map(normalizeDatabase),
     properties: (await db.property.toArray()).map(normalizeProperty),
@@ -21,9 +26,11 @@ async function readSource(store: LocalStore, pages: PageIndex, rootIds: string[]
   }));
 }
 
-async function run(store: LocalStore, rootId: string, target: CopyTarget, source: CopySource, withRows: boolean): Promise<string> {
+/** Plans and writes a copy. `rootFields` go onto the new root page in the same transaction. */
+async function run(store: LocalStore, rootId: string, target: CopyTarget, source: CopySource, withRows: boolean, rootFields: Record<string, unknown> = {}): Promise<string> {
   const plan = planCopy(rootId, target, source, { withRows, newId, now: Date.now() });
-  await store.writeMany(plan.writes);
+  const writes = plan.writes.map((w) => (w.entity === 'page' && w.id === plan.rootId ? { ...w, fields: { ...w.fields, ...rootFields } } : w));
+  await store.writeMany(writes);
   return plan.rootId;
 }
 
@@ -94,9 +101,7 @@ export async function addRowFrom(
   const template = templateId ? databases.templatesOf(databaseId).find((t) => t.id === templateId) : undefined;
   if (template) {
     const source = await readSource(store, pages, [template.id]);
-    const id = await run(store, template.id, { kind: 'new', parentId: db.pageId, sortKey, title: title || template.title, isTemplate: false }, source, true);
-    if (Object.keys(fields).length) await store.write('page', id, fields);
-    return id;
+    return run(store, template.id, { kind: 'new', parentId: db.pageId, sortKey, title: title || template.title, isTemplate: false }, source, true, fields);
   }
   const id = newId();
   const page: Omit<Page, 'id'> = {
@@ -145,7 +150,7 @@ export async function duplicateInlineDatabase(store: LocalStore, pages: PageInde
   const db = databases.byId.get(databaseId);
   if (!db) throw new Error('Database not found');
   const rows = [...databases.rowsOf(databaseId), ...databases.templatesOf(databaseId)].map((r) => r.id);
-  const full = await readSource(store, pages, rows);
+  const full = await readSource(store, pages, rows, [db.pageId]);
   const keep = new Set(rows.flatMap((id) => [id, ...pages.descendants(id).map((p) => p.id)]));
   // Only this database and its rows: the owner page's own blocks and other children stay out.
   const source: CopySource = {

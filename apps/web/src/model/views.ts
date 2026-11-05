@@ -121,7 +121,8 @@ export function matchesFilter(db: DatabaseIndex, properties: Property[], row: Ro
     case 'number': {
       const n = cell.value;
       const v = Number(value);
-      if (n === null || !Number.isFinite(v)) return op === 'neq';
+      if (!Number.isFinite(v)) return true; // not a usable number yet: same as a filter without a value
+      if (n === null) return op === 'neq';
       return { eq: n === v, neq: n !== v, gt: n > v, lt: n < v, gte: n >= v, lte: n <= v }[op as 'eq'] ?? true;
     }
     case 'select':
