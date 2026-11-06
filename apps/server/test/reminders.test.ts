@@ -110,3 +110,28 @@ describe('deadline reminders (F-52)', () => {
     expect(calls).toBe(1);
   });
 });
+
+describe('reminder schedule', () => {
+  it('checks at start, then a second after each minute turns', async () => {
+    const { vi } = await import('vitest');
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(2026, 10, 6, 9, 0, 40));
+      let ticks = 0;
+      const { scheduleReminders } = await import('../src/reminders.ts');
+      const stop = scheduleReminders({ tick: async () => void ticks++ } as never);
+      expect(ticks).toBe(1);
+      await vi.advanceTimersByTimeAsync(20_000); // 09:01:00
+      expect(ticks).toBe(1);
+      await vi.advanceTimersByTimeAsync(1_000); // 09:01:01
+      expect(ticks).toBe(2);
+      await vi.advanceTimersByTimeAsync(60_000); // 09:02:01
+      expect(ticks).toBe(3);
+      stop();
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(ticks).toBe(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
