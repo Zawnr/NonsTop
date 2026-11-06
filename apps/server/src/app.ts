@@ -22,7 +22,7 @@ import type { PushService } from './push.ts';
 import type { SyncService } from './sync.ts';
 
 export const SESSION_COOKIE = 'nonstop_session';
-export const VERSION = '0.1.0';
+export const VERSION = '1.0.0-rc.1';
 
 export interface AppDeps {
   config: Config;
