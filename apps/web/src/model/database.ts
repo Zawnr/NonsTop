@@ -366,12 +366,13 @@ export function formatDate(iso: string): string {
   return `${d} ${MONTHS[(m ?? 1) - 1]} ${y}`;
 }
 
-export const formatDateRange = (v: DateValue) => (v.end ? `${formatDate(v.start)} → ${formatDate(v.end)}` : formatDate(v.start));
+export const formatDateRange = (v: DateValue) =>
+  (v.end ? `${formatDate(v.start)} → ${formatDate(v.end)}` : formatDate(v.start)) + (v.remindAt ? ` 🔔 ${v.remindAt}` : '');
 
-/** Normalizes a date range: the end may not be before the start. */
-export function dateRange(start: string, end: string | null): DateValue {
-  if (end && end < start) return { start: end, end: start };
-  return { start, end };
+/** Normalizes a date range: the end may not be before the start. `remindAt` (F-52) is kept when set. */
+export function dateRange(start: string, end: string | null, remindAt: string | null = null): DateValue {
+  const range = end && end < start ? { start: end, end: start } : { start, end };
+  return remindAt ? { ...range, remindAt } : range;
 }
 
 /** Accepts only http(s) and mailto links, so a stored value cannot run script when clicked. */
