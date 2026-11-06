@@ -1,4 +1,4 @@
-// Server entry point: load config, open DB, start HTTP and the daily backup.
+// Server entry point: load config, open DB, start HTTP, the daily backup and the reminder check.
 import fs from 'node:fs';
 import path from 'node:path';
 import dotenv from 'dotenv';
@@ -8,6 +8,7 @@ import { openDatabase } from './db/client.ts';
 import { LoginLimiter, SessionStore } from './auth.ts';
 import { PushService } from './push.ts';
 import { SyncService } from './sync.ts';
+import { ReminderService, scheduleReminders } from './reminders.ts';
 import { createApp } from './app.ts';
 import { isServerRunning, PID_FILE, scheduleDailyBackup } from './backup.ts';
 
@@ -35,11 +36,12 @@ const sessions = new SessionStore(db, config.sessionDays);
 sessions.pruneExpired();
 
 const production = process.env.NODE_ENV === 'production';
+const push = new PushService(db, config);
 const app = createApp({
   config,
   sessions,
   limiter: new LoginLimiter(),
-  push: new PushService(db, config),
+  push,
   sync: new SyncService(db),
   serveWeb: production,
 });
@@ -54,6 +56,11 @@ const stopBackup = scheduleDailyBackup({
   keepDays: config.backupKeepDays,
 });
 
+// Deadline reminders (F-52), checked every minute.
+// Reminder times are local times, read in this process's time zone (set TZ to change it).
+console.log(`[reminders] time zone ${Intl.DateTimeFormat().resolvedOptions().timeZone}`);
+const stopReminders = scheduleReminders(new ReminderService(db, (payload) => push.sendToAll(payload)));
+
 const server = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) => {
   // Written only after the port is bound. The PID file lets "pnpm restore" refuse to run while the server is up.
   fs.writeFileSync(pidFile, String(process.pid));
@@ -62,6 +69,7 @@ const server = serve({ fetch: app.fetch, hostname: config.host, port: config.por
 
 function shutdown() {
   stopBackup();
+  stopReminders();
   server.close();
   close();
   fs.rmSync(pidFile, { force: true });

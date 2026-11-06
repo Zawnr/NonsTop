@@ -398,3 +398,7 @@ button.template-choice:hover { background: var(--hover); }
 @media (max-width: 767px) {
   .board-col { flex-basis: 78vw; }
 }
+
+/* Ticket links (F-41): "Dari: …" on a ticket, "Ticket: …" on its source page. */
+.ticket-links { gap: 1rem; flex-wrap: wrap; font-size: 0.875rem; margin: -0.25rem 0 0.5rem; }
+.ticket-links .chip-link { display: inline-block; margin-right: 0.35rem; padding: 0 0.4rem; border-radius: 4px; background: var(--hover); color: var(--fg); text-decoration: none; max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }

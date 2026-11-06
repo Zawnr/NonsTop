@@ -48,15 +48,23 @@ const pageFields = {
   databaseId: id.nullable(),
   /** A page template (F-30), or a row template when `databaseId` is set (F-31). */
   isTemplate: z.boolean(),
+  /** A ticket made from an idea page or a checklist item (F-41): the source page. */
+  sourceId: id.nullable(),
+  /** The checklist item block the ticket was made from, on the `sourceId` page. */
+  sourceBlockId: id.nullable(),
 };
 
 /** Prefix of a row's property value fields: `prop.<propertyId>`. */
 export const PROP_PREFIX = 'prop.';
 export const propField = (propertyId: string) => `${PROP_PREFIX}${propertyId}`;
 
-/** Date property value (F-11): ISO date `YYYY-MM-DD`, optional end date. */
+/**
+ * Date property value (F-11): ISO date `YYYY-MM-DD`, optional end date. `remindAt` (F-52) is a
+ * local time `HH:MM` on the start date when a push reminder goes out; absent or null = no reminder.
+ */
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
-export const dateValue = z.object({ start: isoDate, end: isoDate.nullable() });
+export const remindTime = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+export const dateValue = z.object({ start: isoDate, end: isoDate.nullable(), remindAt: remindTime.nullable().optional() });
 export type DateValue = z.infer<typeof dateValue>;
 
 /**
@@ -107,6 +115,10 @@ const blockFields = {
   deleted: z.boolean(),
 };
 
+/** Special roles a database can have. */
+export const databaseKinds = ['ticket'] as const;
+export type DatabaseKind = (typeof databaseKinds)[number];
+
 const databaseFields = {
   /** The page that owns the database: the database page itself, or the page it sits in inline. */
   pageId: id,
@@ -117,6 +129,8 @@ const databaseFields = {
   createdAt: timestamp,
   /** Row template used by "+ Baris baru" (F-31). null = an empty row. */
   defaultTemplateId: id.nullable(),
+  /** `ticket` marks a target of "Jadikan ticket" (F-40, F-41). null = an ordinary database. */
+  kind: z.enum(databaseKinds).nullable(),
 };
 
 export const propertyTypes = ['text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url', 'relation'] as const;
@@ -279,6 +293,8 @@ export interface Page {
   createdAt: number;
   databaseId: string | null;
   isTemplate: boolean;
+  sourceId: string | null;
+  sourceBlockId: string | null;
 }
 
 /** A row's property values, keyed by field name (`prop.<propertyId>`). */
@@ -292,6 +308,7 @@ export interface Database {
   deleted: boolean;
   createdAt: number;
   defaultTemplateId: string | null;
+  kind: DatabaseKind | null;
 }
 
 export interface Property {

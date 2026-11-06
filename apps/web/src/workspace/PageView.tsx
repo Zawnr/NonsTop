@@ -14,6 +14,7 @@ import { RowProperties } from './database/RowProperties.tsx';
 import { Popover } from './database/Popover.tsx';
 import { MoveDialog } from './MoveDialog.tsx';
 import { EmptyPageTemplates, useIsEmptyPage } from './Templates.tsx';
+import { TicketDialog, TicketLinks } from './Tickets.tsx';
 
 const TITLE_SAVE_MS = 400;
 
@@ -24,6 +25,7 @@ export function PageView({ index, page }: { index: PageIndex; page: Page }) {
   const store = useStore();
   const { databases } = useData();
   const [moving, setMoving] = useState(false);
+  const [ticketing, setTicketing] = useState(false);
   const trashed = index.isTrashed(page.id);
   const children = visibleChildren(index, page.id);
   const crumbs = index.ancestors(page.id);
@@ -31,6 +33,8 @@ export function PageView({ index, page }: { index: PageIndex; page: Page }) {
   const isRow = page.databaseId !== null;
   const rowDb = page.databaseId ? databases.byId.get(page.databaseId) : undefined;
   const empty = useIsEmptyPage(page);
+  /** Ideas become tickets: any page but templates, databases and tickets themselves. */
+  const canTicket = !page.isTemplate && !fullDatabase && rowDb?.kind !== 'ticket';
 
   const addChild = async () => navigate(pagePath(await createPage(store, index, page.id)));
   const addDatabase = async () => navigate(pagePath(await createDatabasePage(store, index, page.id)));
@@ -57,6 +61,8 @@ export function PageView({ index, page }: { index: PageIndex; page: Page }) {
       <ConflictBanner pageId={page.id} current={page.title} />
 
       <TitleInput key={page.id} page={page} readOnly={trashed} />
+
+      <TicketLinks page={page} />
 
       {isRow && page.isTemplate && rowDb && (
         <div className="banner" role="status">
@@ -96,6 +102,11 @@ export function PageView({ index, page }: { index: PageIndex; page: Page }) {
             </button>
           )}
           <DuplicateButton index={index} databases={databases} page={page} />
+          {canTicket && (
+            <button className="ghost" onClick={() => setTicketing(true)}>
+              Jadikan ticket
+            </button>
+          )}
           {!isRow && (
             <button className="ghost" aria-pressed={page.isTemplate} onClick={() => void setTemplate(store, page.id, !page.isTemplate)}>
               {page.isTemplate ? 'Bukan template' : 'Jadikan template'}
@@ -148,6 +159,7 @@ export function PageView({ index, page }: { index: PageIndex; page: Page }) {
       )}
 
       {moving && <MoveDialog index={index} page={page} onClose={() => setMoving(false)} />}
+      {ticketing && <TicketDialog source={{ pageId: page.id }} onClose={() => setTicketing(false)} />}
     </article>
   );
 }

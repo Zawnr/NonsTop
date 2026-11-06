@@ -209,8 +209,9 @@ function DateEditor({ prop, row, cell, onDone }: { prop: Property; row: Row; cel
   const today = new Date().toLocaleDateString('sv-SE'); // YYYY-MM-DD in local time
   const [start, setStart] = useState(cell.value?.start ?? today);
   const [end, setEnd] = useState<string | null>(cell.value?.end ?? null);
+  const [remindAt, setRemindAt] = useState<string | null>(cell.value?.remindAt ?? null);
   const save = () => {
-    void setValue(store, row.id, prop.id, start ? dateRange(start, end || null) : null);
+    void setValue(store, row.id, prop.id, start ? dateRange(start, end || null, remindAt ? remindAt.slice(0, 5) : null) : null);
     onDone();
   };
   return (
@@ -232,6 +233,22 @@ function DateEditor({ prop, row, cell, onDone }: { prop: Property; row: Row; cel
               ✕
             </button>
           </span>
+        </label>
+      )}
+      {remindAt === null ? (
+        <button type="button" className="ghost" onClick={() => setRemindAt('09:00')}>
+          + Pengingat
+        </button>
+      ) : (
+        <label>
+          Pengingat jam
+          <span className="row">
+            <input type="time" value={remindAt} required onChange={(e) => setRemindAt(e.target.value)} aria-label="Jam pengingat" />
+            <button type="button" className="ghost" onClick={() => setRemindAt(null)} aria-label="Hapus pengingat">
+              ✕
+            </button>
+          </span>
+          <span className="muted">Notifikasi ke semua perangkat pada tanggal mulai, jam ini.</span>
         </label>
       )}
       <div className="row">

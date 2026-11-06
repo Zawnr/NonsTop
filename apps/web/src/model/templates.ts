@@ -4,6 +4,7 @@ import type { Block, BlockType } from '@nonstop/shared';
 import type { Stored } from '../data/db.ts';
 import type { CopySource } from './copy.ts';
 import { keyBetween } from './pages.ts';
+import { projectSource } from './project.ts';
 
 interface TemplateBlock {
   type: BlockType;
@@ -17,6 +18,10 @@ export interface BuiltinTemplate {
   icon: string;
   description: string;
   blocks: TemplateBlock[];
+  /** Title of a page created from the template. Empty = untitled. */
+  title?: string;
+  /** A template with sub-pages and databases supplies its whole copy source. */
+  source?: () => { rootId: string; source: CopySource };
 }
 
 const h = (text: string): TemplateBlock => ({ type: 'heading', text, props: { level: 2 } });
@@ -66,10 +71,20 @@ export const BUILTIN_TEMPLATES: BuiltinTemplate[] = [
       check('Cek cuaca'),
     ],
   },
+  {
+    id: 'builtin-project',
+    name: 'Proyek',
+    icon: '🎯',
+    description: 'Database Ticket dan Epic, view Backlog dan Board',
+    title: 'Proyek',
+    blocks: [],
+    source: projectSource,
+  },
 ];
 
 /** A built-in template as a copy source: one virtual page with its blocks. */
 export function builtinSource(template: BuiltinTemplate): { rootId: string; source: CopySource } {
+  if (template.source) return template.source();
   let key: string | null = null;
   const blocks: Stored<Block>[] = template.blocks.map((b, i) => ({
     id: `${template.id}-${i}`,

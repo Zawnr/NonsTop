@@ -13,6 +13,8 @@ const page = (id: string, over: Partial<Page> = {}): Page => ({
   createdAt: 0,
   databaseId: null,
   isTemplate: false,
+  sourceId: null,
+  sourceBlockId: null,
   ...over,
 });
 

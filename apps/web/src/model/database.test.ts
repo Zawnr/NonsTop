@@ -5,6 +5,7 @@ import {
   cellText,
   cellValue,
   dateRange,
+  formatDateRange,
   editableNumber,
   defaultConfig,
   indexDatabases,
@@ -38,6 +39,7 @@ const db = (id: string, pageId: string, over: Partial<Database> = {}): Database 
   deleted: false,
   createdAt: 0,
   defaultTemplateId: null,
+  kind: null,
   ...over,
 });
 const prop = (id: string, databaseId: string, over: Partial<Property> = {}): Property => ({
@@ -239,6 +241,8 @@ describe('helpers', () => {
   it('swaps a date range that ends before it starts', () => {
     expect(dateRange('2026-11-07', '2026-11-05')).toEqual({ start: '2026-11-05', end: '2026-11-07' });
     expect(dateRange('2026-11-05', null)).toEqual({ start: '2026-11-05', end: null });
+    expect(dateRange('2026-11-07', '2026-11-05', '08:15')).toEqual({ start: '2026-11-05', end: '2026-11-07', remindAt: '08:15' });
+    expect(formatDateRange({ start: '2026-11-05', end: null, remindAt: '08:15' })).toBe('5 Nov 2026 🔔 08:15');
   });
 
   it('computes a key one step left or right', () => {

@@ -1,9 +1,9 @@
 // Duplicates and templates (F-30, F-31, F-32): reads the records a copy needs, plans it with the pure
 // copy model, and writes everything in one transaction.
-import { propField, type Page } from '@nonstop/shared';
+import { propField } from '@nonstop/shared';
 import { planCopy, type CopySource, type CopyTarget } from '../model/copy.ts';
 import { keyAfter, normalizeDatabase, normalizeProperty, normalizeView, type DatabaseIndex } from '../model/database.ts';
-import { keyBetween, placeAtEnd, visibleChildren, type PageIndex } from '../model/pages.ts';
+import { keyBetween, newPage, placeAtEnd, visibleChildren, type PageIndex } from '../model/pages.ts';
 import { builtinSource, type BuiltinTemplate } from '../model/templates.ts';
 import { newId } from './databases.ts';
 import type { LocalStore } from './store.ts';
@@ -74,7 +74,7 @@ export async function applyTemplate(store: LocalStore, pages: PageIndex, pageId:
 /** Creates a page from a template at the end of `parentId`. Returns the new page id. */
 export async function createFromTemplate(store: LocalStore, pages: PageIndex, parentId: string | null, ref: TemplateRef): Promise<string> {
   const { rootId, source } = await templateSource(store, pages, ref);
-  const title = 'builtin' in ref ? '' : (pages.byId.get(ref.pageId)?.title ?? '');
+  const title = 'builtin' in ref ? (ref.builtin.title ?? '') : (pages.byId.get(ref.pageId)?.title ?? '');
   const sortKey = placeAtEnd(pages, '', parentId)!.sortKey;
   return run(store, rootId, { kind: 'new', parentId, sortKey, title, isTemplate: false }, source, true);
 }
@@ -104,17 +104,12 @@ export async function addRowFrom(
     return run(store, template.id, { kind: 'new', parentId: db.pageId, sortKey, title: title || template.title, isTemplate: false }, source, true, fields);
   }
   const id = newId();
-  const page: Omit<Page, 'id'> = {
+  const page = newPage({
     title,
     parentId: db.pageId,
     sortKey,
-    isFavorite: false,
-    trashedAt: null,
-    deleted: false,
-    createdAt: Date.now(),
     databaseId,
-    isTemplate: false,
-  };
+  });
   await store.write('page', id, { ...page, ...fields });
   return id;
 }
@@ -124,17 +119,12 @@ export async function addRowTemplate(store: LocalStore, databases: DatabaseIndex
   const db = databases.byId.get(databaseId);
   if (!db) throw new Error('Database not found');
   const id = newId();
-  const page: Omit<Page, 'id'> = {
-    title: '',
+  const page = newPage({
     parentId: db.pageId,
     sortKey: keyAfter(databases.templatesOf(databaseId)),
-    isFavorite: false,
-    trashedAt: null,
-    deleted: false,
-    createdAt: Date.now(),
     databaseId,
     isTemplate: true,
-  };
+  });
   await store.write('page', id, page);
   return id;
 }

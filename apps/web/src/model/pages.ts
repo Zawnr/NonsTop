@@ -18,6 +18,24 @@ export function normalizePage(rec: Stored<Page>): Page {
     createdAt: rec.createdAt ?? 0,
     databaseId: rec.databaseId ?? null,
     isTemplate: rec.isTemplate ?? false,
+    sourceId: rec.sourceId ?? null,
+    sourceBlockId: rec.sourceBlockId ?? null,
+  };
+}
+
+/** Fields of a new page: everything off or empty, apart from its place and what `over` sets. */
+export function newPage(over: Partial<Omit<Page, 'id'>> & Pick<Page, 'parentId' | 'sortKey'>): Omit<Page, 'id'> {
+  return {
+    title: '',
+    isFavorite: false,
+    trashedAt: null,
+    deleted: false,
+    createdAt: Date.now(),
+    databaseId: null,
+    isTemplate: false,
+    sourceId: null,
+    sourceBlockId: null,
+    ...over,
   };
 }
 

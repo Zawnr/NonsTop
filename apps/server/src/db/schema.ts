@@ -60,3 +60,18 @@ export const serverMeta = sqliteTable('server_meta', {
   key: text('key').primaryKey(),
   value: text('value').notNull(),
 });
+
+/**
+ * Deadline reminders already sent (F-52), so a reminder goes out once. `fireAt` is the local
+ * date and time (`YYYY-MM-DDTHH:MM`): a new time for the same date is a new reminder.
+ */
+export const remindersSent = sqliteTable(
+  'reminders_sent',
+  {
+    entityId: text('entity_id').notNull(),
+    field: text('field').notNull(),
+    fireAt: text('fire_at').notNull(),
+    sentAt: integer('sent_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.entityId, t.field, t.fireAt] })],
+);

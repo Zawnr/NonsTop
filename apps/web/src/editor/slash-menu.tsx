@@ -18,8 +18,12 @@ const LABELS: Record<string, { title: string; subtext: string; aliases: string[]
 };
 const GROUP = 'Blok';
 
-/** `createDatabase` creates the database record and returns its id (F-10). */
-export function slashMenuItems(editor: Editor, createDatabase: () => string): DefaultReactSuggestionItem[] {
+/**
+ * `createDatabase` creates the database record and returns its id (F-10). `onTicket` turns the
+ * checklist item under the cursor into a ticket (F-41); the item only shows in checklist items.
+ * On phones this is the way in, since the block menu needs a pointer.
+ */
+export function slashMenuItems(editor: Editor, createDatabase: () => string, onTicket?: (blockId: string) => void): DefaultReactSuggestionItem[] {
   const core = getDefaultSlashMenuItems(editor);
   const react = getDefaultReactSlashMenuItems(editor); // same order as core, with icons
   const items: DefaultReactSuggestionItem[] = [];
@@ -45,5 +49,16 @@ export function slashMenuItems(editor: Editor, createDatabase: () => string): De
     icon: <span aria-hidden="true">▦</span>,
     onItemClick: () => insertOrUpdateBlockForSlashMenu(editor, { type: 'database', props: { databaseId: createDatabase() } }),
   });
+  const current = editor.getTextCursorPosition().block;
+  if (onTicket && current.type === 'checkListItem') {
+    items.push({
+      title: 'Jadikan ticket',
+      subtext: 'Buat ticket dari tugas ini, dengan link balik',
+      aliases: ['ticket', 'tiket', 'backlog'],
+      group: 'Tugas',
+      icon: <span aria-hidden="true">🎯</span>,
+      onItemClick: () => onTicket(current.id),
+    });
+  }
   return items;
 }

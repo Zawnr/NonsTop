@@ -94,6 +94,7 @@ export function planCopy(rootId: string, target: CopyTarget, src: CopySource, op
         deleted: false,
         createdAt: opts.now,
         defaultTemplateId: d.defaultTemplateId && pageMap.has(d.defaultTemplateId) ? pageMap.get(d.defaultTemplateId)! : null,
+        kind: d.kind ?? null,
       },
     });
   }
