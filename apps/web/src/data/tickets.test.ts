@@ -132,4 +132,35 @@ describe('convert to ticket (F-41)', () => {
     const links = ((await store.db.block.get('item1'))!.content as { type: string }[]).filter((c) => c.type === 'link');
     expect(links).toHaveLength(2);
   });
+
+  it('keeps links of the user in the title and leaves template projects out of the targets', async () => {
+    const store = await open();
+    const tplProject = await createProject(store, (await snapshot(store)).pages, null);
+    await store.write('page', tplProject, { isTemplate: true });
+    let { pages, databases } = await snapshot(store);
+    expect(ticketDatabases(databases, pages)).toEqual([]);
+
+    await createProject(store, pages, null);
+    const idea = await createPage(store, (await snapshot(store)).pages, null);
+    await store.write('block', 'item1', {
+      pageId: idea,
+      parentId: null,
+      sortKey: 'a0',
+      type: 'checkListItem',
+      props: { checked: false },
+      content: [
+        { type: 'text', text: 'Review ', styles: {} },
+        { type: 'link', href: '/p/spec', content: [{ type: 'text', text: 'Spec login', styles: {} }] },
+        { type: 'text', text: ' with team', styles: {} },
+      ],
+      deleted: false,
+    });
+    ({ pages, databases } = await snapshot(store));
+    const [target] = ticketDatabases(databases, pages);
+    const ticket = await convertToTicket(store, pages, databases, target!.id, { pageId: idea, blockId: 'item1' });
+    ({ pages } = await snapshot(store));
+    expect(pages.byId.get(ticket)!.title).toBe('Review Spec login with team');
+    expect(ticketsFrom(pages, idea, 'item1').map((p) => p.id)).toEqual([ticket]);
+    expect(ticketsFrom(pages, idea, null)).toEqual([]);
+  });
 });

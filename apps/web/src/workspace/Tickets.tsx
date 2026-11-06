@@ -15,10 +15,13 @@ export function TicketDialog({ source, onClose }: { source: TicketSource; onClos
   const ref = useRef<HTMLDialogElement>(null);
   const [busy, setBusy] = useState(false);
   const [made, setMade] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
   useEffect(() => {
     ref.current?.showModal();
   }, []);
   const targets = ticketDatabases(databases, pages);
+  /** Tickets this page or checklist item already has, so a second one is a conscious choice. */
+  const existing = ticketsFrom(pages, source.pageId, source.blockId ?? null).filter((t) => t.id !== made);
   /** "Proyek / Ticket": the page above the database tells projects apart. */
   const label = (pageId: string, title: string) => {
     const parent = pages.parentOf(pageId);
@@ -28,8 +31,12 @@ export function TicketDialog({ source, onClose }: { source: TicketSource; onClos
 
   const pick = async (databaseId: string) => {
     setBusy(true);
+    setFailed(false);
     try {
       setMade(await convertToTicket(store, pages, databases, databaseId, source));
+    } catch (err) {
+      console.error(err);
+      setFailed(true);
     } finally {
       setBusy(false);
     }
@@ -47,6 +54,16 @@ export function TicketDialog({ source, onClose }: { source: TicketSource; onClos
         </p>
       ) : targets.length ? (
         <>
+          {existing.length > 0 && (
+            <p className="muted" role="note">
+              Sudah ada ticket dari {source.blockId ? 'tugas' : 'halaman'} ini: {existing.map((t) => t.title || UNTITLED).join(', ')}. Pilih database di bawah untuk membuat satu lagi.
+            </p>
+          )}
+          {failed && (
+            <p className="error" role="alert">
+              Ticket gagal dibuat. Tugas atau database ini mungkin sudah dihapus di perangkat lain.
+            </p>
+          )}
           <p className="muted">Masuk ke database ticket mana?</p>
           <ul className="template-list">
             {targets.map((d) => (

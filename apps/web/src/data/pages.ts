@@ -1,24 +1,14 @@
 // Page actions. Every change is a field write through the local store, so it works offline.
-import type { Page } from '@nonstop/shared';
-import { keyBetween, placeAtEnd, type PageIndex, type Placement } from '../model/pages.ts';
+import { keyBetween, newPage, placeAtEnd, type PageIndex, type Placement } from '../model/pages.ts';
 import type { LocalStore } from './store.ts';
 
 export async function createPage(store: LocalStore, index: PageIndex, parentId: string | null): Promise<string> {
   const id = crypto.randomUUID();
   const place = placeAtEnd(index, id, parentId)!;
-  const page: Omit<Page, 'id'> = {
-    title: '',
+  const page = newPage({
     parentId: place.parentId,
     sortKey: place.sortKey,
-    isFavorite: false,
-    trashedAt: null,
-    deleted: false,
-    createdAt: Date.now(),
-    databaseId: null,
-    isTemplate: false,
-    sourceId: null,
-    sourceBlockId: null,
-  };
+  });
   await store.write('page', id, page);
   return id;
 }
@@ -87,38 +77,22 @@ export async function createQuickNote(store: LocalStore, index: PageIndex): Prom
   const writes: Parameters<LocalStore['writeMany']>[0] = [];
   if (!inbox) {
     const place = placeAtEnd(index, INBOX_ID, null)!;
-    const page: Omit<Page, 'id'> = {
+    const page = newPage({
       title: 'Inbox',
       parentId: null,
       sortKey: place.sortKey,
       isFavorite: true,
-      trashedAt: null,
-      deleted: false,
-      createdAt: Date.now(),
-      databaseId: null,
-      isTemplate: false,
-      sourceId: null,
-      sourceBlockId: null,
-    };
+    });
     writes.push({ entity: 'page', id: INBOX_ID, fields: page });
   } else if (index.isTrashed(INBOX_ID)) {
     // Restore the Inbox and the trashed pages above it, so the new note is not born in the trash.
     for (const p of [inbox, ...index.ancestors(INBOX_ID)]) if (p.trashedAt !== null) writes.push({ entity: 'page', id: p.id, fields: { trashedAt: null } });
   }
   const last = index.childrenOf(INBOX_ID).at(-1)?.sortKey ?? null;
-  const note: Omit<Page, 'id'> = {
-    title: '',
+  const note = newPage({
     parentId: INBOX_ID,
     sortKey: keyBetween(last, null),
-    isFavorite: false,
-    trashedAt: null,
-    deleted: false,
-    createdAt: Date.now(),
-    databaseId: null,
-    isTemplate: false,
-    sourceId: null,
-    sourceBlockId: null,
-  };
+  });
   writes.push({ entity: 'page', id, fields: note });
   await store.writeMany(writes);
   return id;

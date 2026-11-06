@@ -1,7 +1,7 @@
 // Database actions (F-10, F-13, F-15). Every change is a field write through the local store.
-import { propField, type Database, type Page, type Property, type PropertyConfig, type PropertyType, type SelectOption, type View, type ViewType } from '@nonstop/shared';
+import { propField, type Database, type Property, type PropertyConfig, type PropertyType, type SelectOption, type View, type ViewType } from '@nonstop/shared';
 import { defaultConfig, keyAfter, relationWrites, type DatabaseIndex, type Row } from '../model/database.ts';
-import { placeAtEnd, type PageIndex } from '../model/pages.ts';
+import { newPage, placeAtEnd, type PageIndex } from '../model/pages.ts';
 import type { LocalStore } from './store.ts';
 
 export const newId = () => crypto.randomUUID();
@@ -31,19 +31,10 @@ function databaseWrites(id: string, pageId: string, inline: boolean): Write[] {
 export async function createDatabasePage(store: LocalStore, pages: PageIndex, parentId: string | null): Promise<string> {
   const pageId = newId();
   const place = placeAtEnd(pages, pageId, parentId)!;
-  const page: Omit<Page, 'id'> = {
-    title: '',
+  const page = newPage({
     parentId: place.parentId,
     sortKey: place.sortKey,
-    isFavorite: false,
-    trashedAt: null,
-    deleted: false,
-    createdAt: Date.now(),
-    databaseId: null,
-    isTemplate: false,
-    sourceId: null,
-    sourceBlockId: null,
-  };
+  });
   await store.writeMany([{ entity: 'page', id: pageId, fields: page }, ...databaseWrites(newId(), pageId, false)]);
   return pageId;
 }
@@ -58,19 +49,12 @@ export async function addRow(store: LocalStore, index: DatabaseIndex, databaseId
   const db = index.byId.get(databaseId);
   if (!db) throw new Error('Database not found');
   const id = newId();
-  const page: Omit<Page, 'id'> = {
+  const page = newPage({
     title,
     parentId: db.pageId,
     sortKey: keyAfter(index.rowsOf(databaseId)),
-    isFavorite: false,
-    trashedAt: null,
-    deleted: false,
-    createdAt: Date.now(),
     databaseId,
-    isTemplate: false,
-    sourceId: null,
-    sourceBlockId: null,
-  };
+  });
   await store.write('page', id, page);
   return id;
 }

@@ -4,9 +4,10 @@ import type { Database, Page, Property } from '@nonstop/shared';
 import type { DatabaseIndex } from './database.ts';
 import { UNTITLED, type PageIndex } from './pages.ts';
 
-/** Databases marked as ticket databases, whose page is not in the trash. */
+/** Databases marked as ticket databases, outside the trash and outside page templates. */
 export function ticketDatabases(dbs: DatabaseIndex, pages: PageIndex): Database[] {
-  return [...dbs.byId.values()].filter((d) => d.kind === 'ticket' && pages.byId.has(d.pageId) && !pages.isTrashed(d.pageId));
+  const inTemplate = (pageId: string) => [pages.byId.get(pageId), ...pages.ancestors(pageId)].some((p) => p?.isTemplate);
+  return [...dbs.byId.values()].filter((d) => d.kind === 'ticket' && pages.byId.has(d.pageId) && !pages.isTrashed(d.pageId) && !inTemplate(d.pageId));
 }
 
 /** The status property of a ticket database: the first status property. */
@@ -21,10 +22,10 @@ export function startOption(status: Property): string | null {
   return pick?.id ?? null;
 }
 
-/** Live tickets made from this page, oldest first. */
-export function ticketsFrom(pages: PageIndex, sourceId: string): Page[] {
+/** Live tickets made from this page (or from one checklist item on it), oldest first. */
+export function ticketsFrom(pages: PageIndex, sourceId: string, blockId?: string | null): Page[] {
   return [...pages.byId.values()]
-    .filter((p) => p.sourceId === sourceId && p.databaseId !== null && !pages.isTrashed(p.id))
+    .filter((p) => p.sourceId === sourceId && (blockId === undefined || p.sourceBlockId === blockId) && p.databaseId !== null && !pages.isTrashed(p.id))
     .sort((a, b) => a.createdAt - b.createdAt || (a.id < b.id ? -1 : 1));
 }
 
@@ -36,14 +37,17 @@ export function ticketTitle(text: string): string {
 
 type Inline = { type: string; [key: string]: unknown };
 
+/** Label of the link a ticket leaves on its checklist item. */
+export const ticketLinkLabel = (title: string) => `→ ${title || UNTITLED}`;
+
 /**
  * A checklist item's content with a link to the ticket at the end. Content that already links to
- * the ticket is returned unchanged, so converting twice adds one link.
+ * this ticket is returned unchanged. Each new ticket from the same item adds its own link.
  */
 export function withTicketLink(content: unknown, ticketId: string, title: string): Inline[] {
   const list = Array.isArray(content) ? (content as Inline[]) : [];
   const href = `/p/${ticketId}`;
   if (list.some((c) => c.type === 'link' && c.href === href)) return list;
-  const label = `→ ${title || UNTITLED}`;
+  const label = ticketLinkLabel(title);
   return [...list, { type: 'text', text: ' ', styles: {} }, { type: 'link', href, content: [{ type: 'text', text: label, styles: {} }] }];
 }

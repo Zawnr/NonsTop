@@ -57,6 +57,8 @@ const stopBackup = scheduleDailyBackup({
 });
 
 // Deadline reminders (F-52), checked every minute.
+// Reminder times are local times, read in this process's time zone (set TZ to change it).
+console.log(`[reminders] time zone ${Intl.DateTimeFormat().resolvedOptions().timeZone}`);
 const stopReminders = scheduleReminders(new ReminderService(db, (payload) => push.sendToAll(payload)));
 
 const server = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) => {

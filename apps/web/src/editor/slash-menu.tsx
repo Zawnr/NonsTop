@@ -51,7 +51,7 @@ export function slashMenuItems(editor: Editor, createDatabase: () => string, onT
   });
   const current = editor.getTextCursorPosition().block;
   if (onTicket && current.type === 'checkListItem') {
-    items.unshift({
+    items.push({
       title: 'Jadikan ticket',
       subtext: 'Buat ticket dari tugas ini, dengan link balik',
       aliases: ['ticket', 'tiket', 'backlog'],

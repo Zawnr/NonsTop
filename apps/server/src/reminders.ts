@@ -52,7 +52,7 @@ export class ReminderService {
     return out;
   }
 
-  /** Reminders due now and not sent yet. */
+  /** Reminders due now (within the late limit). Those already sent are skipped by `tick`. */
   due(): DueReminder[] {
     const now = this.now();
     const candidates = this.db
@@ -98,12 +98,6 @@ export class ReminderService {
       if (!prop || prop.type !== 'date' || prop.deleted === true || !page || page.isTemplate === true || !live(f.pageId)) continue;
       if (typeof page.databaseId === 'string' && databases.get(page.databaseId)?.deleted === true) continue;
       const fireAt = `${f.start}T${f.remindAt}`;
-      const sent = this.db
-        .select()
-        .from(remindersSent)
-        .where(and(eq(remindersSent.entityId, f.pageId), eq(remindersSent.field, f.field), eq(remindersSent.fireAt, fireAt)))
-        .get();
-      if (sent) continue;
       const [y, m, d] = f.start.split('-').map(Number);
       const title = typeof page.title === 'string' && page.title.trim() ? page.title : 'Tanpa judul';
       const name = typeof prop.name === 'string' && prop.name ? prop.name : 'Tanggal';

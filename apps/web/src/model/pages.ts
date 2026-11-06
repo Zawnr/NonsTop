@@ -23,6 +23,22 @@ export function normalizePage(rec: Stored<Page>): Page {
   };
 }
 
+/** Fields of a new page: everything off or empty, apart from its place and what `over` sets. */
+export function newPage(over: Partial<Omit<Page, 'id'>> & Pick<Page, 'parentId' | 'sortKey'>): Omit<Page, 'id'> {
+  return {
+    title: '',
+    isFavorite: false,
+    trashedAt: null,
+    deleted: false,
+    createdAt: Date.now(),
+    databaseId: null,
+    isTemplate: false,
+    sourceId: null,
+    sourceBlockId: null,
+    ...over,
+  };
+}
+
 export function bySortKey(a: Page, b: Page): number {
   if (a.sortKey !== b.sortKey) return a.sortKey < b.sortKey ? -1 : 1;
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;

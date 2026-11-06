@@ -1,9 +1,9 @@
 // Ticket actions (F-40, F-41): create a project, and turn an idea page or a checklist item into a
 // ticket. The ticket, its status and the link on the checklist item are written in one transaction.
-import { propField, type Page } from '@nonstop/shared';
+import { propField } from '@nonstop/shared';
 import { contentText } from '../model/blocks.ts';
 import { keyAfter, type DatabaseIndex } from '../model/database.ts';
-import type { PageIndex } from '../model/pages.ts';
+import { newPage, type PageIndex } from '../model/pages.ts';
 import { BUILTIN_TEMPLATES } from '../model/templates.ts';
 import { startOption, ticketStatus, ticketTitle, withTicketLink } from '../model/tickets.ts';
 import { createFromTemplate } from './copy.ts';
@@ -22,10 +22,14 @@ export interface TicketSource {
   blockId?: string;
 }
 
-/** Text of a checklist item without the ticket links added to it earlier. */
+/** Text of a checklist item without the ticket links added to it earlier. Other links stay. */
 function itemText(content: unknown): string {
-  const list = Array.isArray(content) ? content : [];
-  return contentText(list.filter((c: { type?: string; href?: unknown }) => !(c?.type === 'link' && typeof c.href === 'string' && c.href.startsWith('/p/'))));
+  const list: unknown[] = Array.isArray(content) ? content : [];
+  const isTicketLink = (c: unknown) => {
+    const node = c as { type?: string; href?: unknown; content?: unknown };
+    return node?.type === 'link' && typeof node.href === 'string' && node.href.startsWith('/p/') && contentText(node.content).startsWith('→ ');
+  };
+  return contentText(list.filter((c) => !isTicketLink(c)));
 }
 
 /** Creates a ticket in `databaseId` from the source and links them. Returns the ticket id. */
@@ -43,19 +47,14 @@ export async function convertToTicket(
   const title = ticketTitle(block ? itemText(block.content) : (pages.byId.get(source.pageId)?.title ?? ''));
 
   const id = newId();
-  const page: Omit<Page, 'id'> = {
+  const page = newPage({
     title,
     parentId: db.pageId,
     sortKey: keyAfter(databases.rowsOf(databaseId)),
-    isFavorite: false,
-    trashedAt: null,
-    deleted: false,
-    createdAt: Date.now(),
     databaseId,
-    isTemplate: false,
     sourceId: source.pageId,
     sourceBlockId: source.blockId ?? null,
-  };
+  });
   const status = ticketStatus(databases, databaseId);
   const start = status ? startOption(status) : null;
   const fields: Record<string, unknown> = { ...page };
