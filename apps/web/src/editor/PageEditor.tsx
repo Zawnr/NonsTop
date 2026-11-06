@@ -249,6 +249,7 @@ function NonstopDragMenu() {
     <DragHandleMenu>
       <RemoveBlockItem>Hapus</RemoveBlockItem>
       <BlockColorsItem>Warna</BlockColorsItem>
+      <MoveItems />
       <TicketItem />
     </DragHandleMenu>
   );
@@ -256,6 +257,36 @@ function NonstopDragMenu() {
 
 function NonstopSideMenu(props: SideMenuProps) {
   return <SideMenu {...props} dragHandleMenu={NonstopDragMenu} />;
+}
+
+/**
+ * Move and indent from the block menu. On touch screens a drag is unreliable, so these four items
+ * are the way to reorder blocks there; on the laptop they sit next to drag and Tab.
+ */
+function MoveItems() {
+  const Components = useComponentsContext()!;
+  const editor = useBlockNoteEditor();
+  const block = useExtensionState(SideMenuExtension, { editor, selector: (state) => state?.block });
+  if (!block || !editor.isEditable) return null;
+  const atBlock = (fn: () => void) => () => {
+    editor.setTextCursorPosition(block.id, 'end');
+    fn();
+  };
+  const items: [string, () => void][] = [
+    ['Naikkan', () => editor.moveBlocksUp(block.id)],
+    ['Turunkan', () => editor.moveBlocksDown(block.id)],
+    ['Masuk (indent)', atBlock(() => editor.canNestBlock() && editor.nestBlock())],
+    ['Keluar (outdent)', atBlock(() => editor.canUnnestBlock() && editor.unnestBlock())],
+  ];
+  return (
+    <>
+      {items.map(([label, run]) => (
+        <Components.Generic.Menu.Item key={label} className="bn-menu-item" onClick={run}>
+          {label}
+        </Components.Generic.Menu.Item>
+      ))}
+    </>
+  );
 }
 
 /** "Jadikan ticket" in the block menu, for checklist items only (F-41). */
