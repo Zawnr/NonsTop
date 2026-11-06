@@ -1,5 +1,6 @@
 {
   "name": "nonstop",
+  "version": "1.0.0-rc.1",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@12.4.1",
