@@ -16,6 +16,8 @@ export async function createPage(store: LocalStore, index: PageIndex, parentId: 
     createdAt: Date.now(),
     databaseId: null,
     isTemplate: false,
+    sourceId: null,
+    sourceBlockId: null,
   };
   await store.write('page', id, page);
   return id;

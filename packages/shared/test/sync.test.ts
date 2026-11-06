@@ -115,4 +115,17 @@ describe('database entities', () => {
     expect(check('database', 'defaultTemplateId', 'r1')).toBe(true);
     expect(check('database', 'defaultTemplateId', null)).toBe(true);
   });
+
+  it('validates ticket kind, ticket source and reminder times (sprint 5)', () => {
+    expect(check('database', 'kind', 'ticket')).toBe(true);
+    expect(check('database', 'kind', null)).toBe(true);
+    expect(check('database', 'kind', 'sprint')).toBe(false);
+    expect(check('page', 'sourceId', 'p1')).toBe(true);
+    expect(check('page', 'sourceBlockId', null)).toBe(true);
+    const f = propField('prop1');
+    expect(check('page', f, { start: '2026-11-06', end: null, remindAt: '09:30' })).toBe(true);
+    expect(check('page', f, { start: '2026-11-06', end: null, remindAt: null })).toBe(true);
+    expect(check('page', f, { start: '2026-11-06', end: null, remindAt: '24:00' })).toBe(false);
+    expect(check('page', f, { start: '2026-11-06', end: null, remindAt: '9:30' })).toBe(false);
+  });
 });

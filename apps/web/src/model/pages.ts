@@ -18,6 +18,8 @@ export function normalizePage(rec: Stored<Page>): Page {
     createdAt: rec.createdAt ?? 0,
     databaseId: rec.databaseId ?? null,
     isTemplate: rec.isTemplate ?? false,
+    sourceId: rec.sourceId ?? null,
+    sourceBlockId: rec.sourceBlockId ?? null,
   };
 }
 

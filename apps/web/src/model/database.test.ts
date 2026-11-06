@@ -38,6 +38,7 @@ const db = (id: string, pageId: string, over: Partial<Database> = {}): Database 
   deleted: false,
   createdAt: 0,
   defaultTemplateId: null,
+  kind: null,
   ...over,
 });
 const prop = (id: string, databaseId: string, over: Partial<Property> = {}): Property => ({

@@ -15,7 +15,7 @@ const newView = (type: ViewType) => ({ name: VIEW_NAMES[type], type, deleted: fa
 
 /** A new database with a "Tabel" view and one text property, so the table has a second column. */
 function databaseWrites(id: string, pageId: string, inline: boolean): Write[] {
-  const db: Omit<Database, 'id'> = { pageId, inline, title: '', deleted: false, createdAt: Date.now(), defaultTemplateId: null };
+  const db: Omit<Database, 'id'> = { pageId, inline, title: '', deleted: false, createdAt: Date.now(), defaultTemplateId: null, kind: null };
   return [
     { entity: 'database', id, fields: db },
     { entity: 'view', id: newId(), fields: { databaseId: id, ...newView('table'), sortKey: 'a0' } },
@@ -41,6 +41,8 @@ export async function createDatabasePage(store: LocalStore, pages: PageIndex, pa
     createdAt: Date.now(),
     databaseId: null,
     isTemplate: false,
+    sourceId: null,
+    sourceBlockId: null,
   };
   await store.writeMany([{ entity: 'page', id: pageId, fields: page }, ...databaseWrites(newId(), pageId, false)]);
   return pageId;
@@ -66,6 +68,8 @@ export async function addRow(store: LocalStore, index: DatabaseIndex, databaseId
     createdAt: Date.now(),
     databaseId,
     isTemplate: false,
+    sourceId: null,
+    sourceBlockId: null,
   };
   await store.write('page', id, page);
   return id;

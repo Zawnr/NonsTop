@@ -54,6 +54,7 @@ export function normalizeDatabase(rec: Stored<Database>): Database {
     deleted: rec.deleted ?? false,
     createdAt: rec.createdAt ?? 0,
     defaultTemplateId: rec.defaultTemplateId ?? null,
+    kind: rec.kind ?? null,
   };
 }
 

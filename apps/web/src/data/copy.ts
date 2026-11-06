@@ -74,7 +74,7 @@ export async function applyTemplate(store: LocalStore, pages: PageIndex, pageId:
 /** Creates a page from a template at the end of `parentId`. Returns the new page id. */
 export async function createFromTemplate(store: LocalStore, pages: PageIndex, parentId: string | null, ref: TemplateRef): Promise<string> {
   const { rootId, source } = await templateSource(store, pages, ref);
-  const title = 'builtin' in ref ? '' : (pages.byId.get(ref.pageId)?.title ?? '');
+  const title = 'builtin' in ref ? (ref.builtin.title ?? '') : (pages.byId.get(ref.pageId)?.title ?? '');
   const sortKey = placeAtEnd(pages, '', parentId)!.sortKey;
   return run(store, rootId, { kind: 'new', parentId, sortKey, title, isTemplate: false }, source, true);
 }
@@ -114,6 +114,8 @@ export async function addRowFrom(
     createdAt: Date.now(),
     databaseId,
     isTemplate: false,
+    sourceId: null,
+    sourceBlockId: null,
   };
   await store.write('page', id, { ...page, ...fields });
   return id;
@@ -134,6 +136,8 @@ export async function addRowTemplate(store: LocalStore, databases: DatabaseIndex
     createdAt: Date.now(),
     databaseId,
     isTemplate: true,
+    sourceId: null,
+    sourceBlockId: null,
   };
   await store.write('page', id, page);
   return id;

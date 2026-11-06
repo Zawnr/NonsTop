@@ -27,6 +27,7 @@ export const db = (id: string, pageId: string, over: Partial<Database> = {}): Da
   deleted: false,
   createdAt: 0,
   defaultTemplateId: null,
+  kind: null,
   ...over,
 });
 
