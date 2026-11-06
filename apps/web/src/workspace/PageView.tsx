@@ -305,15 +305,24 @@ function TitleInput({ page, readOnly }: { page: Page; readOnly: boolean }) {
     if (dirty.current) save(next);
   };
 
-  // Leaving the page while a save is waiting: save now, so no typed text is lost.
-  useEffect(
-    () => () => {
+  // Leaving the page, or the app going to the background, while a save is waiting: save now, so no
+  // typed text is lost.
+  useEffect(() => {
+    const flushPending = () => {
       if (timer.current) clearTimeout(timer.current);
+      timer.current = null;
       if (pending.current !== null) save(pending.current);
-    },
-    // Runs on unmount only. The component remounts per page (key = page id).
-    [],
-  );
+    };
+    const onHidden = () => document.visibilityState === 'hidden' && flushPending();
+    document.addEventListener('visibilitychange', onHidden);
+    window.addEventListener('pagehide', flushPending);
+    return () => {
+      document.removeEventListener('visibilitychange', onHidden);
+      window.removeEventListener('pagehide', flushPending);
+      flushPending();
+    };
+    // Registered once per mount. The component remounts per page (key = page id).
+  }, []);
 
   return (
     <input

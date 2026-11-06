@@ -114,14 +114,22 @@ function EditorInner({ pageId, rows, readOnly }: { pageId: string; rows: Stored<
       });
   };
 
-  // Save what is still waiting when the page closes.
-  useEffect(
-    () => () => {
+  // Save what is still waiting when the page closes, when the app goes to the background (a phone
+  // may kill it there without warning), or when the tab is closed or reloaded.
+  useEffect(() => {
+    const flush = () => {
       if (timer.current) save();
-    },
-    // Unmount only: save reads refs, so it needs no dependencies.
-    [],
-  );
+    };
+    const onHidden = () => document.visibilityState === 'hidden' && flush();
+    document.addEventListener('visibilitychange', onHidden);
+    window.addEventListener('pagehide', flush);
+    return () => {
+      document.removeEventListener('visibilitychange', onHidden);
+      window.removeEventListener('pagehide', flush);
+      flush();
+    };
+    // save reads refs only, so it needs no dependencies.
+  }, []);
 
   // Remote changes: rows carrying a timestamp this editor has not seen.
   useEffect(() => {
