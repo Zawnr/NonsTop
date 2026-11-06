@@ -17,6 +17,7 @@ export function normalizePage(rec: Stored<Page>): Page {
     deleted: rec.deleted ?? false,
     createdAt: rec.createdAt ?? 0,
     databaseId: rec.databaseId ?? null,
+    isTemplate: rec.isTemplate ?? false,
   };
 }
 
@@ -111,9 +112,19 @@ export function indexPages(records: Page[]): PageIndex {
   };
 }
 
-/** Pages visible in the sidebar tree under a parent (null = top level). Database rows are left out. */
+/**
+ * Pages visible in the sidebar tree under a parent (null = top level). Database rows are left out,
+ * and so are page templates, which have their own sidebar section.
+ */
 export function visibleChildren(index: PageIndex, parentId: string | null): Page[] {
-  return index.childrenOf(parentId).filter((p) => p.trashedAt === null && p.databaseId === null);
+  return index.childrenOf(parentId).filter((p) => p.trashedAt === null && p.databaseId === null && !p.isTemplate);
+}
+
+/** Page templates made by the user (F-30), by title. Row templates belong to their database. */
+export function pageTemplates(index: PageIndex): Page[] {
+  return [...index.byId.values()]
+    .filter((p) => p.isTemplate && p.databaseId === null && !index.isTrashed(p.id))
+    .sort((a, b) => (a.title || UNTITLED).localeCompare(b.title || UNTITLED, 'id'));
 }
 
 export function favorites(index: PageIndex): Page[] {

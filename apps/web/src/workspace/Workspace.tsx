@@ -10,6 +10,7 @@ import { PageView } from './PageView.tsx';
 import { SearchDialog } from './SearchDialog.tsx';
 import { SettingsView } from './SettingsView.tsx';
 import { SyncBadge } from './SyncBadge.tsx';
+import { SidebarTemplates, TemplateDialog } from './Templates.tsx';
 import { TrashView } from './TrashView.tsx';
 
 export function Workspace({ onLogout }: { onLogout: () => void }) {
@@ -18,6 +19,7 @@ export function Workspace({ onLogout }: { onLogout: () => void }) {
   const route = useRoute();
   const [navOpen, setNavOpen] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [templating, setTemplating] = useState(false);
   const store = useStore();
 
   useEffect(() => {
@@ -67,7 +69,11 @@ export function Workspace({ onLogout }: { onLogout: () => void }) {
         <button className="ghost new-page" onClick={() => void newDatabase()}>
           + Database baru
         </button>
+        <button className="ghost new-page" onClick={() => (setTemplating(true), closeNav())}>
+          Dari template…
+        </button>
         <Favorites index={index} currentId={currentId} onNavigate={closeNav} />
+        <SidebarTemplates index={index} currentId={currentId} onNavigate={closeNav} />
         <h2 className="section-title">Halaman</h2>
         <PageTree index={index} currentId={currentId} onNavigate={closeNav} />
         <div className="sidebar-foot">
@@ -86,6 +92,7 @@ export function Workspace({ onLogout }: { onLogout: () => void }) {
         <View index={index} onLogout={onLogout} onNewPage={() => void newPage()} />
       </main>
       {searching && <SearchDialog index={index} onClose={() => setSearching(false)} />}
+      {templating && <TemplateDialog index={index} onClose={() => setTemplating(false)} />}
     </div>
     </DataContext.Provider>
   );

@@ -1,19 +1,26 @@
 // Property management (F-13): add, rename, reorder, hide, delete, and edit options with colors.
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
-import { optionColors, propertyTypes, statusGroups, type Property, type PropertyType, type SelectOption, type StatusGroup } from '@nonstop/shared';
-import { addProperty, deleteProperty, movePropertyTo, newId, renameProperty, setOptions, setPropertyHidden } from '../../data/databases.ts';
+import { optionColors, propertyTypes, statusGroups, type Property, type PropertyType, type SelectOption, type StatusGroup, type View } from '@nonstop/shared';
+import { addProperty, deleteProperty, movePropertyTo, newId, renameProperty, setOptions, setPropertyHidden, updateView } from '../../data/databases.ts';
+import { hiddenAfter, visibleProperties } from '../../model/views.ts';
 import { useData, useStore } from '../../data/workspace.tsx';
 import { COLOR_LABELS, databaseTitle, moveKey, TYPE_LABELS } from '../../model/database.ts';
 import { Popover } from './Popover.tsx';
 
 const GROUP_LABELS: Record<StatusGroup, string> = { todo: 'Belum', doing: 'Berjalan', done: 'Selesai' };
 
-export function PropertyMenu({ prop, anchor, onClose }: { prop: Property; anchor: HTMLElement | null; onClose: () => void }) {
+/** `view`: the view the menu was opened from. Hiding a property applies to that view only (F-23). */
+export function PropertyMenu({ prop, view, anchor, onClose }: { prop: Property; view?: View; anchor: HTMLElement | null; onClose: () => void }) {
   const store = useStore();
   const { pages, databases } = useData();
   const [name, setName] = useState(prop.name);
+  const all = databases.propertiesOf(prop.databaseId);
+  const visible = visibleProperties(view, all);
+  const isHidden = !visible.some((p) => p.id === prop.id);
   // Steps count only the columns the user sees, so a hidden column in between never eats a click.
-  const list = databases.propertiesOf(prop.databaseId).filter((p) => p.hidden === prop.hidden);
+  const list = isHidden ? all.filter((p) => !visible.includes(p)) : visible;
+  const toggleHidden = () =>
+    view ? updateView(store, view.id, { hiddenProps: hiddenAfter(view, all, prop.id, !isHidden) }) : setPropertyHidden(store, prop.id, !prop.hidden);
   const left = moveKey(list, prop.id, -1);
   const right = moveKey(list, prop.id, 1);
   const target = prop.config.databaseId ? databases.byId.get(prop.config.databaseId) : undefined;
@@ -57,8 +64,8 @@ export function PropertyMenu({ prop, anchor, onClose }: { prop: Property; anchor
           <button type="button" className="ghost" disabled={!right} onClick={() => right && void movePropertyTo(store, prop.id, right)}>
             Geser kanan →
           </button>
-          <button type="button" className="ghost" onClick={() => (void setPropertyHidden(store, prop.id, !prop.hidden), onClose())}>
-            {prop.hidden ? 'Tampilkan' : 'Sembunyikan'}
+          <button type="button" className="ghost" onClick={() => (void toggleHidden(), onClose())}>
+            {isHidden ? 'Tampilkan' : 'Sembunyikan'}
           </button>
           <button type="button" className="ghost danger" onClick={() => void remove()}>
             Hapus properti

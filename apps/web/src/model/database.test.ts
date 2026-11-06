@@ -27,6 +27,7 @@ const page = (id: string, over: Partial<Page> & Record<string, unknown> = {}): S
   deleted: false,
   createdAt: 0,
   databaseId: null,
+  isTemplate: false,
   ...over,
 });
 const db = (id: string, pageId: string, over: Partial<Database> = {}): Database => ({
@@ -36,6 +37,7 @@ const db = (id: string, pageId: string, over: Partial<Database> = {}): Database 
   title: '',
   deleted: false,
   createdAt: 0,
+  defaultTemplateId: null,
   ...over,
 });
 const prop = (id: string, databaseId: string, over: Partial<Property> = {}): Property => ({
@@ -56,6 +58,10 @@ const view = (id: string, databaseId: string, over: Partial<View> = {}): View =>
   type: 'table',
   sortKey: 'a0',
   deleted: false,
+  filters: [],
+  sorts: [],
+  groupBy: null,
+  hiddenProps: null,
   ...over,
 });
 

@@ -133,6 +133,9 @@ test('tree: drag a page onto another to nest it, and before it to reorder', asyn
     await page.mouse.down();
     await page.mouse.move(source!.x + 10, source!.y + source!.height / 2 + 10, { steps: 3 });
     await page.mouse.move(target!.x + 40, y, { steps: 10 });
+    // Under load the last move can land after the drop: settle on the target before releasing.
+    await page.mouse.move(target!.x + 42, y, { steps: 2 });
+    await expect(page.locator('.tree-row.drop-inside, .tree-row.drop-before')).toHaveCount(1);
     await page.mouse.up();
   };
 

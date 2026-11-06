@@ -176,6 +176,17 @@ sequenceDiagram
 - Relation dua arah: membuat relation A ke B juga membuat properti balik di B (`config.reverseOf`). Nilai hanya disimpan di sisi asal. Sisi balik dihitung dari indeks di memori. Edit dari sisi balik menulis ke baris asal. Menghapus salah satu menghapus pasangannya.
 - Migrasi client: Dexie versi 3 menambah tabel `database`, `property`, `view`. Daftar entity berubah, jadi kursor pull di-reset dan semua ditarik ulang (mekanisme dari sprint 2).
 
+### Catatan implementasi (sprint 4)
+Keputusan user (2026-11-05): duplikat database memberi pilihan "dengan isi" atau "struktur saja"; template halaman dipilih dari halaman kosong dan dari tombol di sidebar; filter digabung DAN saja; kartu board di HP dipindah dengan tekan lama lalu geser, plus menu "Pindah ke".
+
+- Field sinkron baru, tanpa entity baru: `view.filters` (daftar {propertyId, op, value}), `view.sorts` (daftar {propertyId, dir}), `view.groupBy` (id properti atau null), `view.hiddenProps` (daftar id, null = ikut `property.hidden` lama), `view.type` bertambah `board`. `page.isTemplate` (boolean). `database.defaultTemplateId` (id atau null).
+- Properti tampil jadi milik view (F-23). View lama tanpa `hiddenProps` tetap memakai `property.hidden`, lalu menyalinnya saat pertama kali diubah.
+- Board (F-21): kolom = opsi properti status atau select di `groupBy`, plus kolom "Tanpa <properti>". Pindah kolom menulis nilai properti. Urutan di dalam kolom memakai `sortKey` baris, kecuali view punya sort. Tabel dan list juga bisa dikelompokkan.
+- Filter per tipe: teks/URL/judul (berisi, tidak berisi, kosong, tidak kosong), angka (=, ≠, >, <, ≥, ≤, kosong), select/status (adalah, bukan, kosong), multi-select dan relation (berisi, tidak berisi, kosong), tanggal (pada, sebelum, sesudah, kosong), checkbox (dicentang, tidak). Baris baru di view berfilter atau di kolom board langsung diberi nilai yang cocok bila filternya sederhana.
+- Template halaman (F-30): bawaan di kode (Kanvas ide, Rencana trip) dan halaman user dengan `isTemplate`. Template user tampil di bagian Template sidebar, bukan di pohon. Memakai template = menyalin isi template (blok, sub-halaman, database) ke halaman tujuan.
+- Template baris (F-31): baris dengan `isTemplate` di database itu, tidak tampil di view. "+ Baris baru" memakai `defaultTemplateId` kalau ada. Menu ▾ untuk memilih, membuat, mengedit, dan menjadikan default.
+- Duplikat (F-32): satu fungsi salin pohon halaman yang memetakan ulang semua id (halaman, blok, database, properti, view, opsi tetap). Relation di dalam salinan menunjuk ke salinan. Relation ke database di luar salinan ikut disalin dan mendapat properti balik baru di database tujuan.
+
 ### Alur utama
 - **Catatan cepat (F-50):** shortcut PWA "Catatan baru" di launcher Android membuka halaman baru di Inbox dengan kursor siap mengetik.
 - **Pengingat (F-52):** properti date bisa diberi jam pengingat. Scheduler server mengecek tiap menit, mengirim web-push ke semua perangkat terdaftar, dan mencatat yang sudah terkirim agar tidak dobel.

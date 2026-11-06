@@ -97,7 +97,22 @@ describe('database entities', () => {
     expect(check('property', 'config', { options: [{ id: 'o1', name: 'X', color: 'teal' }] })).toBe(false);
     expect(check('property', 'config', { databaseId: 'db2', pairId: 'p2', reverse: true })).toBe(true);
     expect(check('view', 'type', 'list')).toBe(true);
-    expect(check('view', 'type', 'board')).toBe(false);
+    expect(check('view', 'type', 'board')).toBe(true);
+    expect(check('view', 'type', 'calendar')).toBe(false);
     expect(check('block', 'type', 'database')).toBe(true);
+  });
+
+  it('validates view settings, templates and the default row template (sprint 4)', () => {
+    expect(check('view', 'filters', [{ propertyId: 'title', op: 'contains', value: 'a' }])).toBe(true);
+    expect(check('view', 'filters', [{ propertyId: 'p1', op: 'empty', value: null }])).toBe(true);
+    expect(check('view', 'filters', [{ propertyId: 'p1', op: 'matches', value: 'a' }])).toBe(false);
+    expect(check('view', 'sorts', [{ propertyId: 'p1', dir: 'desc' }])).toBe(true);
+    expect(check('view', 'sorts', [{ propertyId: 'p1', dir: 'up' }])).toBe(false);
+    expect(check('view', 'groupBy', null)).toBe(true);
+    expect(check('view', 'hiddenProps', ['p1'])).toBe(true);
+    expect(check('view', 'hiddenProps', null)).toBe(true);
+    expect(check('page', 'isTemplate', true)).toBe(true);
+    expect(check('database', 'defaultTemplateId', 'r1')).toBe(true);
+    expect(check('database', 'defaultTemplateId', null)).toBe(true);
   });
 });

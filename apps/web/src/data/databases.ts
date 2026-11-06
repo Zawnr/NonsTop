@@ -1,5 +1,5 @@
 // Database actions (F-10, F-13, F-15). Every change is a field write through the local store.
-import { propField, type Database, type Page, type Property, type PropertyConfig, type PropertyType, type SelectOption, type ViewType } from '@nonstop/shared';
+import { propField, type Database, type Page, type Property, type PropertyConfig, type PropertyType, type SelectOption, type View, type ViewType } from '@nonstop/shared';
 import { defaultConfig, keyAfter, relationWrites, type DatabaseIndex, type Row } from '../model/database.ts';
 import { placeAtEnd, type PageIndex } from '../model/pages.ts';
 import type { LocalStore } from './store.ts';
@@ -8,14 +8,17 @@ export const newId = () => crypto.randomUUID();
 
 type Write = Parameters<LocalStore['writeMany']>[0][number];
 
-const VIEW_NAMES: Record<ViewType, string> = { table: 'Tabel', list: 'List' };
+export const VIEW_NAMES: Record<ViewType, string> = { table: 'Tabel', list: 'List', board: 'Board' };
+
+/** Fields of a new view. Hidden properties start as an empty list: every property shows. */
+const newView = (type: ViewType) => ({ name: VIEW_NAMES[type], type, deleted: false, filters: [], sorts: [], groupBy: null, hiddenProps: [] });
 
 /** A new database with a "Tabel" view and one text property, so the table has a second column. */
 function databaseWrites(id: string, pageId: string, inline: boolean): Write[] {
-  const db: Omit<Database, 'id'> = { pageId, inline, title: '', deleted: false, createdAt: Date.now() };
+  const db: Omit<Database, 'id'> = { pageId, inline, title: '', deleted: false, createdAt: Date.now(), defaultTemplateId: null };
   return [
     { entity: 'database', id, fields: db },
-    { entity: 'view', id: newId(), fields: { databaseId: id, name: VIEW_NAMES.table, type: 'table', sortKey: 'a0', deleted: false } },
+    { entity: 'view', id: newId(), fields: { databaseId: id, ...newView('table'), sortKey: 'a0' } },
     {
       entity: 'property',
       id: newId(),
@@ -37,6 +40,7 @@ export async function createDatabasePage(store: LocalStore, pages: PageIndex, pa
     deleted: false,
     createdAt: Date.now(),
     databaseId: null,
+    isTemplate: false,
   };
   await store.writeMany([{ entity: 'page', id: pageId, fields: page }, ...databaseWrites(newId(), pageId, false)]);
   return pageId;
@@ -61,6 +65,7 @@ export async function addRow(store: LocalStore, index: DatabaseIndex, databaseId
     deleted: false,
     createdAt: Date.now(),
     databaseId,
+    isTemplate: false,
   };
   await store.write('page', id, page);
   return id;
@@ -132,11 +137,18 @@ export const setOptions = (store: LocalStore, prop: Property, options: SelectOpt
 
 export async function addView(store: LocalStore, index: DatabaseIndex, databaseId: string, type: ViewType): Promise<string> {
   const id = newId();
-  await store.write('view', id, { databaseId, name: VIEW_NAMES[type], type, sortKey: keyAfter(index.viewsOf(databaseId)), deleted: false });
+  // A board needs a property to group by: the first status, else the first select.
+  const props = index.propertiesOf(databaseId);
+  const groupBy = type === 'board' ? (props.find((p) => p.type === 'status') ?? props.find((p) => p.type === 'select'))?.id ?? null : null;
+  await store.write('view', id, { databaseId, ...newView(type), groupBy, sortKey: keyAfter(index.viewsOf(databaseId)) });
   return id;
 }
 
 export const renameView = (store: LocalStore, id: string, name: string) => store.write('view', id, { name });
+
+/** Changes a view's filters, sorts, grouping or hidden properties (F-23). */
+export const updateView = (store: LocalStore, id: string, fields: Partial<Pick<View, 'filters' | 'sorts' | 'groupBy' | 'hiddenProps'>>) =>
+  store.write('view', id, fields);
 export const deleteView = (store: LocalStore, id: string) => store.write('view', id, { deleted: true });
 
 /**

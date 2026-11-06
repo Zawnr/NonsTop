@@ -14,6 +14,7 @@ const page = (id: string, title: string, over: Partial<Page> = {}): Page => ({
   deleted: false,
   createdAt: 0,
   databaseId: null,
+  isTemplate: false,
   ...over,
 });
 const block = (id: string, pageId: string, text: string, over: Partial<Stored<Block>> = {}): Stored<Block> => ({

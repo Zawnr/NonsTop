@@ -342,3 +342,59 @@ button.small { justify-self: start; min-height: 32px; padding: 0.125rem 0.5rem; 
   /* Text under 16px makes iOS zoom into the field on focus. */
   input, select, textarea, .cell-input, .pop-search { font-size: 16px; }
 }
+
+/* View settings (F-23) */
+.view-toolbar { gap: 0.375rem; }
+button.chip-btn {
+  min-height: 32px; padding: 0.125rem 0.625rem; font-size: 0.8125rem; border-radius: 999px;
+  background: transparent; color: var(--muted); border: 1px solid var(--border);
+}
+button.chip-btn.on { color: var(--fg); border-color: var(--fg); }
+.settings-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
+.settings-item { display: flex; flex-wrap: wrap; gap: 0.375rem; align-items: center; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+.settings-item select, .settings-item input { flex: 1 1 7rem; min-width: 0; width: auto; }
+.check-row { display: flex; align-items: center; gap: 0.5rem; min-height: 40px; padding: 0 0.25rem; color: var(--fg); font-size: 0.9375rem; }
+.check-row input { width: 18px; height: 18px; }
+.pop-default { display: flex; align-items: center; gap: 0.375rem; }
+
+/* Groups in tables and lists */
+.db-table .group-row th { background: var(--hover); padding: 0.25rem 0.5rem; text-align: left; position: static; }
+.group-label { display: inline-flex; align-items: center; gap: 0.5rem; font-weight: 500; font-size: 0.875rem; }
+.group-head { margin: 0.75rem 0 0.25rem; font-size: 0.875rem; }
+.db-groups { display: grid; gap: 0.25rem; }
+
+/* New row with template menu (F-31) */
+.split { display: inline-flex; }
+.split > button:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.split > button.split-more { border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: none; padding: 0.25rem 0.5rem; }
+
+/* Board (F-21) */
+.board { display: flex; gap: 0.75rem; overflow-x: auto; padding-bottom: 0.5rem; align-items: flex-start; -webkit-overflow-scrolling: touch; }
+.board-col { flex: 0 0 16rem; background: var(--hover); border-radius: 10px; padding: 0.5rem; display: grid; gap: 0.5rem; }
+.board-col.drop { outline: 2px solid var(--drop); outline-offset: -2px; }
+.board-col-head { display: flex; align-items: center; gap: 0.5rem; min-height: 32px; }
+.board-count { font-size: 0.8125rem; margin-right: auto; }
+.board-cards { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; min-height: 2.5rem; }
+.board-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 0.25rem;
+  display: grid; gap: 0.25rem; touch-action: manipulation; -webkit-touch-callout: none;
+}
+.board-card.dragging { opacity: 0.4; }
+.board-card-title { display: flex; align-items: center; font-weight: 500; font-size: 0.9375rem; }
+.board-card-title .cell-btn { flex: 1; min-width: 0; }
+.board-card-title .icon { min-height: 30px; min-width: 30px; font-size: 0.875rem; }
+.board-card-props { display: flex; flex-wrap: wrap; gap: 0.25rem; padding: 0 0.5rem 0.25rem; font-size: 0.8125rem; }
+.drop-line { height: 3px; border-radius: 2px; background: var(--drop); }
+
+/* Page templates (F-30) */
+.template-list { list-style: none; margin: 0.5rem 0 1rem; padding: 0; display: grid; gap: 0.25rem; }
+button.template-choice { width: 100%; display: flex; gap: 0.625rem; align-items: center; text-align: left; border: none; min-height: 44px; }
+button.template-choice:hover { background: var(--hover); }
+.empty-templates { border: 1px dashed var(--border); border-radius: 10px; padding: 0.75rem; }
+.empty-templates .template-list { margin: 0.25rem 0 0; }
+.db-title { align-items: center; flex-wrap: nowrap; }
+.db-title .cell-btn { flex: 1; min-width: 0; }
+
+@media (max-width: 767px) {
+  .board-col { flex-basis: 78vw; }
+}
