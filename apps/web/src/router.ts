@@ -1,7 +1,7 @@
 // Minimal client-side router on top of the History API.
 import { useSyncExternalStore } from 'react';
 
-export type Route = { name: 'home' } | { name: 'page'; id: string } | { name: 'trash' } | { name: 'settings' };
+export type Route = { name: 'home' } | { name: 'page'; id: string } | { name: 'trash' } | { name: 'settings' } | { name: 'quick' };
 
 const listeners = new Set<() => void>();
 window.addEventListener('popstate', () => listeners.forEach((l) => l()));
@@ -11,6 +11,8 @@ export function parseRoute(path: string): Route {
   if (page) return { name: 'page', id: page[1]! };
   if (path === '/trash') return { name: 'trash' };
   if (path === '/settings') return { name: 'settings' };
+  /** Quick note (F-50): the PWA shortcut opens this path. */
+  if (path === '/quick') return { name: 'quick' };
   return { name: 'home' };
 }
 

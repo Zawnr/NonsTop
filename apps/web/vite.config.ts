@@ -34,6 +34,8 @@ export default defineConfig({
           { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
           { src: '/icons/maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
+        // Long-press on the launcher icon (F-50).
+        shortcuts: [{ name: 'Catatan baru', short_name: 'Catatan', url: '/quick', icons: [{ src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' }] }],
       },
     }),
   ],

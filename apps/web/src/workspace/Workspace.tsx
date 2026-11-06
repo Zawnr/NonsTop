@@ -1,7 +1,7 @@
 // App layout: sidebar (fixed on wide screens, drawer on phones) and the current view.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createDatabasePage } from '../data/databases.ts';
-import { createPage } from '../data/pages.ts';
+import { createPage, createQuickNote } from '../data/pages.ts';
 import { DataContext, useLiveWorkspaceData, useStore } from '../data/workspace.tsx';
 import { favorites, trashRoots, UNTITLED, type PageIndex } from '../model/pages.ts';
 import { navigate, pagePath, useRoute } from '../router.ts';
@@ -34,6 +34,19 @@ export function Workspace({ onLogout }: { onLogout: () => void }) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+
+  // Quick note (F-50): create the note once the data is loaded, then replace /quick with its page,
+  // so Back does not create another one.
+  const quickDone = useRef(false);
+  useEffect(() => {
+    if (route.name !== 'quick') {
+      quickDone.current = false;
+      return;
+    }
+    if (!index || quickDone.current) return;
+    quickDone.current = true;
+    void createQuickNote(store, index).then((id) => navigate(pagePath(id), { replace: true }));
+  }, [route.name, index, store]);
 
   if (!data || !index) return null;
   const trashCount = trashRoots(index).length;
