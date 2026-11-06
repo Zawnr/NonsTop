@@ -13,6 +13,7 @@
     "start": "pnpm build && pnpm --filter @nonstop/server start",
     "backup": "pnpm --filter @nonstop/server backup",
     "restore": "pnpm --filter @nonstop/server restore",
+    "restore-check": "pnpm --filter @nonstop/server restore-check",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",
