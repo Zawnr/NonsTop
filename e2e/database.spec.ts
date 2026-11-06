@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { addProperty, addRow, cell, createDatabase, fillCell, pickOption, table } from './database-helpers.ts';
-import { gotoStable, login, openNav, opensNewPage, setTitle, syncNow, treeLink, unique } from './helpers.ts';
+import { gotoStable, login, openNav, opensNewPage, pageAction, setTitle, syncNow, treeLink, unique } from './helpers.ts';
 
 test('database: every property type is edited in the table, kept after reload and synced', async ({ page, browser }) => {
   await login(page);
@@ -238,7 +238,7 @@ test('database: numbers edit without thousands separators, and a trashed row kee
     // Phones delete a row from its page; the table keeps the title column free of the trash icon.
     await expect(page.getByRole('button', { name: `Hapus baris ${row}` })).toBeHidden();
     await table(page).getByRole('button', { name: `Buka ${row}`, exact: true }).click();
-    await page.getByRole('button', { name: 'Hapus', exact: true }).click();
+    await pageAction(page, 'Hapus');
     await expect(page).not.toHaveURL(/\/p\//);
   } else {
     await page.getByRole('button', { name: `Hapus baris ${row}` }).click();

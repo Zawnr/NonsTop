@@ -54,8 +54,11 @@ export function EmptyPageTemplates({ page }: { page: Page }) {
   const { pages } = useData();
   return (
     <section className="empty-templates" aria-label="Mulai dari template">
-      <p className="muted">Mulai dari template, atau langsung ketik di bawah.</p>
-      <TemplateList index={pages} exclude={page.id} onPick={(ref) => void applyTemplate(store, pages, page.id, ref)} />
+      {/* Folded on phones, so a quick note starts typing near the top (N-02). */}
+      <details open={!window.matchMedia('(max-width: 767px)').matches}>
+        <summary className="muted">Mulai dari template, atau langsung ketik di bawah.</summary>
+        <TemplateList index={pages} exclude={page.id} onPick={(ref) => void applyTemplate(store, pages, page.id, ref)} />
+      </details>
     </section>
   );
 }

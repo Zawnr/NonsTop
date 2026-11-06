@@ -86,42 +86,17 @@ export function PageView({ index, page }: { index: PageIndex; page: Page }) {
       {isRow && <RowProperties page={page} readOnly={trashed} />}
 
       {!trashed && (
-        <div className="row actions">
-          <button className="ghost" aria-pressed={page.isFavorite} onClick={() => void setFavorite(store, page.id, !page.isFavorite)}>
-            {page.isFavorite ? '★ Favorit' : '☆ Favoritkan'}
-          </button>
-          <button className="ghost" onClick={() => void addChild()}>
-            + Sub-halaman
-          </button>
-          <button className="ghost" onClick={() => void addDatabase()}>
-            + Database
-          </button>
-          {!isRow && (
-            <button className="ghost" onClick={() => setMoving(true)}>
-              Pindahkan
-            </button>
-          )}
-          <DuplicateButton index={index} databases={databases} page={page} />
-          {canTicket && (
-            <button className="ghost" onClick={() => setTicketing(true)}>
-              Jadikan ticket
-            </button>
-          )}
-          {!isRow && (
-            <button className="ghost" aria-pressed={page.isTemplate} onClick={() => void setTemplate(store, page.id, !page.isTemplate)}>
-              {page.isTemplate ? 'Bukan template' : 'Jadikan template'}
-            </button>
-          )}
-          <button
-            className="ghost danger"
-            onClick={async () => {
-              await trashPage(store, page.id);
-              navigate('/');
-            }}
-          >
-            Hapus
-          </button>
-        </div>
+        <PageActions
+          index={index}
+          databases={databases}
+          page={page}
+          isRow={isRow}
+          canTicket={canTicket}
+          onAddChild={() => void addChild()}
+          onAddDatabase={() => void addDatabase()}
+          onMove={() => setMoving(true)}
+          onTicket={() => setTicketing(true)}
+        />
       )}
       {trashed && page.trashedAt !== null && (
         <div className="row actions">
@@ -164,36 +139,107 @@ export function PageView({ index, page }: { index: PageIndex; page: Page }) {
   );
 }
 
-/** Duplicates the page (F-32). A page with databases asks whether their rows come along. */
-function DuplicateButton({ index, databases, page }: { index: PageIndex; databases: DatabaseIndex; page: Page }) {
+interface Action {
+  label: string;
+  run: () => void;
+  pressed?: boolean;
+  danger?: boolean;
+}
+
+/**
+ * The page's actions. On wide screens they sit in a row. On phones only Favorit stays in view and
+ * the rest move into "⋯ Lainnya", so the editor or board starts near the top (N-02).
+ */
+function PageActions(props: {
+  index: PageIndex;
+  databases: DatabaseIndex;
+  page: Page;
+  isRow: boolean;
+  canTicket: boolean;
+  onAddChild: () => void;
+  onAddDatabase: () => void;
+  onMove: () => void;
+  onTicket: () => void;
+}) {
+  const { index, databases, page, isRow, canTicket } = props;
   const store = useStore();
-  const [open, setOpen] = useState(false);
-  const btn = useRef<HTMLButtonElement>(null);
+  const [menu, setMenu] = useState(false);
+  /** The element the duplicate choices open from: the Duplikat button, or "Lainnya" on phones. */
+  const [dupFrom, setDupFrom] = useState<HTMLElement | null>(null);
+  const moreBtn = useRef<HTMLButtonElement>(null);
   const ids = new Set([page.id, ...index.descendants(page.id).map((p) => p.id)]);
   const hasDatabase = [...databases.byId.values()].some((d) => ids.has(d.pageId));
-  const run = async (withRows: boolean) => {
-    setOpen(false);
+
+  const duplicate = async (withRows: boolean) => {
+    setDupFrom(null);
     navigate(pagePath(await duplicatePage(store, index, databases, page.id, withRows)));
   };
+  const startDuplicate = (from: HTMLElement | null) => (hasDatabase ? setDupFrom(from) : void duplicate(true));
+
+  const before: Action[] = [
+    { label: '+ Sub-halaman', run: props.onAddChild },
+    { label: '+ Database', run: props.onAddDatabase },
+    ...(!isRow ? [{ label: 'Pindahkan', run: props.onMove }] : []),
+  ];
+  const after: Action[] = [
+    ...(canTicket ? [{ label: 'Jadikan ticket', run: props.onTicket }] : []),
+    ...(!isRow ? [{ label: page.isTemplate ? 'Bukan template' : 'Jadikan template', pressed: page.isTemplate, run: () => void setTemplate(store, page.id, !page.isTemplate) }] : []),
+    {
+      label: 'Hapus',
+      danger: true,
+      run: () =>
+        void trashPage(store, page.id).then(() => navigate('/')),
+    },
+  ];
+  const inline = (a: Action) => (
+    <button key={a.label} className={a.danger ? 'ghost danger inline-action' : 'ghost inline-action'} aria-pressed={a.pressed} onClick={a.run}>
+      {a.label}
+    </button>
+  );
+  const item = (a: Action) => (
+    <button key={a.label} type="button" className={a.danger ? 'ghost pop-item danger' : 'ghost pop-item'} onClick={() => (setMenu(false), a.run())}>
+      {a.label}
+    </button>
+  );
+
   return (
-    <>
-      <button ref={btn} className="ghost" onClick={() => (hasDatabase ? setOpen(true) : void run(true))}>
+    <div className="row actions">
+      <button className="ghost" aria-pressed={page.isFavorite} onClick={() => void setFavorite(store, page.id, !page.isFavorite)}>
+        {page.isFavorite ? '★ Favorit' : '☆ Favoritkan'}
+      </button>
+      {before.map(inline)}
+      <button className="ghost inline-action" onClick={(e) => startDuplicate(e.currentTarget)}>
         Duplikat
       </button>
-      {open && (
-        <Popover anchor={btn.current} label="Duplikat" onClose={() => setOpen(false)}>
+      {after.map(inline)}
+      <button ref={moreBtn} className="ghost more-toggle" aria-haspopup="dialog" onClick={() => setMenu(true)}>
+        ⋯ Lainnya
+      </button>
+      {menu && (
+        <Popover anchor={moreBtn.current} label="Aksi halaman" onClose={() => setMenu(false)}>
           <div className="pop-list">
-            <button type="button" className="ghost pop-item" onClick={() => void run(true)}>
+            {before.map(item)}
+            <button type="button" className="ghost pop-item" onClick={() => (setMenu(false), startDuplicate(moreBtn.current))}>
+              Duplikat
+            </button>
+            {after.map(item)}
+          </div>
+        </Popover>
+      )}
+      {dupFrom && (
+        <Popover anchor={dupFrom} label="Duplikat" onClose={() => setDupFrom(null)}>
+          <div className="pop-list">
+            <button type="button" className="ghost pop-item" onClick={() => void duplicate(true)}>
               Duplikat dengan isi
             </button>
-            <button type="button" className="ghost pop-item" onClick={() => void run(false)}>
+            <button type="button" className="ghost pop-item" onClick={() => void duplicate(false)}>
               Duplikat struktur saja
             </button>
             <p className="muted pop-head">Struktur saja: database tanpa baris, template baris tetap ikut.</p>
           </div>
         </Popover>
       )}
-    </>
+    </div>
   );
 }
 
@@ -292,7 +338,13 @@ function TitleInput({ page, readOnly }: { page: Page; readOnly: boolean }) {
         if (timer.current) clearTimeout(timer.current);
         timer.current = setTimeout(() => flush(next), TITLE_SAVE_MS);
       }}
-      onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+      onKeyDown={(e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        e.currentTarget.blur();
+        // Continue in the editor, so a quick note goes from title to text without a tap (N-02).
+        document.querySelector<HTMLElement>('[data-testid="editor"] [contenteditable="true"]')?.focus();
+      }}
     />
   );
 }

@@ -12,7 +12,10 @@ test('N-01: a page with 100 blocks opens in under 300 ms, typing reacts within a
   await createPage(page, big);
   const editor = page.getByTestId('editor');
   await editor.locator('[contenteditable="true"]').click();
-  for (let i = 1; i <= BLOCKS; i++) await page.keyboard.insertText(`Baris ${i} isi catatan`), await page.keyboard.press('Enter');
+  for (let i = 1; i <= BLOCKS; i++) {
+    await page.keyboard.insertText(`Baris ${i} isi catatan`);
+    await page.keyboard.press('Enter');
+  }
   await expect(editor.getByText(`Baris ${BLOCKS} isi catatan`)).toBeVisible();
   const other = unique('Lain');
   await createPage(page, other); // saves the long page and leaves it

@@ -392,13 +392,27 @@ button.template-choice { width: 100%; display: flex; gap: 0.625rem; align-items:
 button.template-choice:hover { background: var(--hover); }
 .empty-templates { border: 1px dashed var(--border); border-radius: 10px; padding: 0.75rem; }
 .empty-templates .template-list { margin: 0.25rem 0 0; }
+.empty-templates summary { cursor: pointer; }
+@media (max-width: 767px) { .empty-templates { padding: 0.5rem 0.75rem; } }
 .db-title { align-items: center; flex-wrap: nowrap; }
 .db-title .cell-btn { flex: 1; min-width: 0; }
 
 @media (max-width: 767px) {
-  .board-col { flex-basis: 78vw; }
+  .board-col { flex-basis: 78vw; scroll-snap-align: start; }
+  /* Columns settle at their start when swiped, without fighting a card being dragged. */
+  .board { scroll-snap-type: x proximity; scroll-padding-left: 0.25rem; }
 }
+.mobile-bar-end { gap: 0.5rem; align-items: center; }
+.mobile-bar .quick-note { min-height: 40px; padding: 0.25rem 0.75rem; font-size: 0.875rem; }
 
 /* Ticket links (F-41): "Dari: …" on a ticket, "Ticket: …" on its source page. */
 .ticket-links { gap: 1rem; flex-wrap: wrap; font-size: 0.875rem; margin: -0.25rem 0 0.5rem; }
 .ticket-links .chip-link { display: inline-block; margin-right: 0.35rem; padding: 0 0.4rem; border-radius: 4px; background: var(--hover); color: var(--fg); text-decoration: none; max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+
+/* Page actions (N-02): a row on wide screens, Favorit plus "⋯ Lainnya" on phones. */
+.more-toggle { display: none; }
+.pop-item.danger { color: var(--error); }
+@media (max-width: 767px) {
+  .actions .inline-action { display: none; }
+  .actions .more-toggle { display: inline-flex; }
+}

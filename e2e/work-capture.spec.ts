@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { addProperty, addRow, cell, createDatabase, pickOption, table } from './database-helpers.ts';
-import { createPage, gotoStable, login, openNav, setTitle, unique } from './helpers.ts';
+import { createPage, gotoStable, login, openNav, pageAction, pageActionNames, setTitle, unique } from './helpers.ts';
 
 const isPhone = () => test.info().project.name === 'android';
 
@@ -31,7 +31,7 @@ test('project template: Ticket and Epic, an idea page becomes a backlog ticket w
 
   const idea = unique('Ide');
   await createPage(page, idea);
-  await page.getByRole('button', { name: 'Jadikan ticket' }).click();
+  await pageAction(page, 'Jadikan ticket');
   await pickTicketDatabase(page, project);
 
   // The idea stays and links to its ticket; the ticket links back.
@@ -42,7 +42,7 @@ test('project template: Ticket and Epic, an idea page becomes a backlog ticket w
   await expect(page.getByLabel('Judul halaman')).toHaveValue(idea);
   await expect(page.getByLabel('Link ticket')).toContainText('Dari:');
   await expect(cell(page, 'Status', idea)).toHaveText('Backlog');
-  await expect(page.getByRole('button', { name: 'Jadikan ticket' })).toHaveCount(0);
+  expect(await pageActionNames(page)).not.toContain('Jadikan ticket');
 
   // Backlog view lists open tickets only; the board groups them by status.
   await page.getByRole('navigation', { name: 'Lokasi halaman' }).getByRole('link', { name: 'Ticket' }).click();

@@ -98,3 +98,26 @@ export async function waitForServiceWorker(page: Page) {
   await page.reload(); // let the active service worker control the page
   await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null)).toBe(true);
 }
+
+/** Runs a page action. On phones the actions sit in the "⋯ Lainnya" menu (N-02). */
+export async function pageAction(page: Page, name: string) {
+  const more = page.getByRole('button', { name: '⋯ Lainnya' });
+  if (await more.isVisible()) {
+    await more.click();
+    await page.getByRole('dialog', { name: 'Aksi halaman' }).getByRole('button', { name, exact: true }).click();
+  } else {
+    await page.getByRole('main').getByRole('button', { name, exact: true }).click();
+  }
+}
+
+/** The names of the page actions on offer, wherever they are shown. */
+export async function pageActionNames(page: Page): Promise<string[]> {
+  const more = page.getByRole('button', { name: '⋯ Lainnya' });
+  if (!(await more.isVisible())) return page.locator('.actions .inline-action').allInnerTexts();
+  await more.click();
+  const dialog = page.getByRole('dialog', { name: 'Aksi halaman' });
+  const names = await dialog.locator('.pop-item').allInnerTexts();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  return names;
+}
