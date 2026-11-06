@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { openDatabase } from '../src/db/client.ts';
 import { fieldState, remindersSent } from '../src/db/schema.ts';
 import { checkRestore } from '../src/restore-check.ts';
-import { listBackups } from '../src/backup.ts';
 
 let root: string;
 let dataDir: string;
@@ -30,17 +29,20 @@ describe('restore check', () => {
     fs.writeFileSync(path.join(dataDir, 'files', 'img', 'a.png'), 'png-bytes');
     const liveBefore = fs.readdirSync(dataDir).sort();
 
-    const result = await checkRestore(dataDir, backupDir);
+    const result = await checkRestore(dataDir);
     expect(result.ok).toBe(true);
-    expect(result.tables.find((t) => t.table === 'field_state')).toEqual({ table: 'field_state', liveRows: 50, restoredRows: 50, same: true });
+    expect(result.tables.find((t) => t.table === 'field_state')).toEqual({ table: 'field_state', backupRows: 50, restoredRows: 50, same: true });
     expect(result.tables.find((t) => t.table === 'reminders_sent')!.restoredRows).toBe(1);
-    expect(result.files).toEqual({ live: 1, restored: 1, same: true });
-    expect(listBackups(backupDir)).toEqual([result.backup]);
-    // No pre-restore folder or other change in the live data folder.
+    // Every content table is checked, found from the schema; the epoch table is not.
+    expect(result.tables.map((t) => t.table)).toEqual(['changes', 'field_state', 'push_subscriptions', 'reminders_sent', 'sessions']);
+    expect(result.liveRows.field_state).toBe(50);
+    expect(result.files).toEqual({ backup: 1, restored: 1, same: true });
+    // No backup in the real backup folder, and no change in the live data folder.
+    expect(fs.existsSync(backupDir)).toBe(false);
     expect(fs.readdirSync(dataDir).sort()).toEqual(liveBefore);
   });
 
   it('refuses to run on a data folder without a database', async () => {
-    await expect(checkRestore(dataDir, backupDir)).rejects.toThrow(/Database not found/);
+    await expect(checkRestore(dataDir)).rejects.toThrow(/Database not found/);
   });
 });

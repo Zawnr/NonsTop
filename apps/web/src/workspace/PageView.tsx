@@ -15,6 +15,7 @@ import { Popover } from './database/Popover.tsx';
 import { MoveDialog } from './MoveDialog.tsx';
 import { EmptyPageTemplates, useIsEmptyPage } from './Templates.tsx';
 import { TicketDialog, TicketLinks } from './Tickets.tsx';
+import { useFlushOnHide } from '../hooks/flush-on-hide.ts';
 
 const TITLE_SAVE_MS = 400;
 
@@ -307,22 +308,11 @@ function TitleInput({ page, readOnly }: { page: Page; readOnly: boolean }) {
 
   // Leaving the page, or the app going to the background, while a save is waiting: save now, so no
   // typed text is lost.
-  useEffect(() => {
-    const flushPending = () => {
-      if (timer.current) clearTimeout(timer.current);
-      timer.current = null;
-      if (pending.current !== null) save(pending.current);
-    };
-    const onHidden = () => document.visibilityState === 'hidden' && flushPending();
-    document.addEventListener('visibilitychange', onHidden);
-    window.addEventListener('pagehide', flushPending);
-    return () => {
-      document.removeEventListener('visibilitychange', onHidden);
-      window.removeEventListener('pagehide', flushPending);
-      flushPending();
-    };
-    // Registered once per mount. The component remounts per page (key = page id).
-  }, []);
+  useFlushOnHide(() => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+    if (pending.current !== null) save(pending.current);
+  });
 
   return (
     <input
@@ -348,7 +338,8 @@ function TitleInput({ page, readOnly }: { page: Page; readOnly: boolean }) {
         timer.current = setTimeout(() => flush(next), TITLE_SAVE_MS);
       }}
       onKeyDown={(e) => {
-        if (e.key !== 'Enter') return;
+        // An Enter that confirms an IME composition belongs to the keyboard, not to us.
+        if (e.key !== 'Enter' || e.nativeEvent.isComposing) return;
         e.preventDefault();
         e.currentTarget.blur();
         // Continue in the editor, so a quick note goes from title to text without a tap (N-02).

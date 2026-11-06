@@ -1,43 +1,50 @@
-// Restore drill (Done when, MVP 1): back up the live data, restore that backup into a scratch
-// folder with the normal restore code, and compare the two copies table by table and file by file.
-// The live data is never touched, so the drill is safe while the server runs.
+// Restore drill (Done when, MVP 1): take a backup of the live data into a scratch folder, restore it
+// with the normal restore code into another scratch folder, and compare the restored copy with the
+// backup table by table and file by file. The backup is a consistent snapshot, so writes from the
+// running server cannot make the comparison flaky. The live data and the real backup folder are
+// never touched, so the drill is safe while the server runs and does not count as a daily backup.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type Database from 'better-sqlite3';
-import { openDatabase } from './db/client.ts';
+import Database from 'better-sqlite3';
+import { DB_FILE, openDatabase } from './db/client.ts';
 import { createBackup, FILES_DIR, restoreBackup } from './backup.ts';
 
-/** Content tables. `server_meta` is left out: a restore gives it a new sync epoch on purpose. */
-export const CHECKED_TABLES = ['field_state', 'changes', 'sessions', 'push_subscriptions', 'reminders_sent'] as const;
+/** Left out: a restore gives `server_meta` a new sync epoch on purpose; the rest is bookkeeping. */
+const SKIPPED = new Set(['server_meta', '__drizzle_migrations']);
 
 export interface TableCheck {
   table: string;
-  liveRows: number;
+  backupRows: number;
   restoredRows: number;
   same: boolean;
 }
 
 export interface RestoreCheck {
-  backup: string;
   tables: TableCheck[];
-  files: { live: number; restored: number; same: boolean };
+  files: { backup: number; restored: number; same: boolean };
+  /** Row counts of the live data right after the backup, for the report. */
+  liveRows: Record<string, number>;
   ok: boolean;
 }
 
-interface Fingerprint {
-  rows: number;
-  hash: string;
+/** Content tables of a database: every table except SQLite's own and the skipped ones. */
+function contentTables(db: Database.Database): string[] {
+  return (db.prepare("select name from sqlite_master where type = 'table' and name not like 'sqlite_%' order by name").all() as { name: string }[])
+    .map((r) => r.name)
+    .filter((n) => !SKIPPED.has(n));
 }
 
-/** Row count and a hash of every row, in a fixed order (all columns, sorted). */
-function fingerprint(sqlite: Database.Database, table: string): Fingerprint {
-  const cols = (sqlite.prepare(`pragma table_info(${table})`).all() as { name: string }[]).map((c) => `"${c.name}"`);
-  const rows = sqlite.prepare(`select ${cols.join(', ')} from ${table} order by ${cols.join(', ')}`).raw().all();
+/** Row count and a hash of every row in rowid order, streamed so large tables stay out of memory. */
+function fingerprint(db: Database.Database, table: string): { rows: number; hash: string } {
   const hash = crypto.createHash('sha256');
-  for (const r of rows) hash.update(JSON.stringify(r)).update('\n');
-  return { rows: rows.length, hash: hash.digest('hex') };
+  let rows = 0;
+  for (const r of db.prepare(`select * from "${table}" order by rowid`).raw().iterate()) {
+    hash.update(JSON.stringify(r)).update('\n');
+    rows++;
+  }
+  return { rows, hash: hash.digest('hex') };
 }
 
 /** Relative path and SHA-256 of every file below `dir`. */
@@ -54,43 +61,40 @@ function fileList(dir: string): Map<string, string> {
 
 const sameMap = (a: Map<string, string>, b: Map<string, string>) => a.size === b.size && [...a].every(([k, v]) => b.get(k) === v);
 
-export async function checkRestore(dataDir: string, backupDir: string, now: Date = new Date()): Promise<RestoreCheck> {
-  const live = openDatabase(dataDir, { mustExist: true });
-  let name: string;
-  let before: Map<string, Fingerprint>;
-  try {
-    // The server may write while the backup runs. Take the fingerprint on both sides of it and
-    // retry when they differ, so the comparison is against the state the backup holds.
-    const snap = () => new Map(CHECKED_TABLES.map((t) => [t, fingerprint(live.sqlite, t)]));
-    for (let attempt = 0; ; attempt++) {
-      before = snap();
-      name = await createBackup(live.sqlite, dataDir, backupDir, new Date(now.getTime() + attempt * 1000));
-      const after = snap();
-      if (CHECKED_TABLES.every((t) => after.get(t)!.hash === before.get(t)!.hash) || attempt >= 4) break;
-    }
-  } finally {
-    live.close();
-  }
-
+export async function checkRestore(dataDir: string, now: Date = new Date()): Promise<RestoreCheck> {
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'nonstop-restore-check-'));
   try {
+    const backupDir = path.join(scratch, 'backups');
+    const live = openDatabase(dataDir, { mustExist: true });
+    let name: string;
+    const liveRows: Record<string, number> = {};
+    try {
+      name = await createBackup(live.sqlite, dataDir, backupDir, now);
+      for (const t of contentTables(live.sqlite)) liveRows[t] = (live.sqlite.prepare(`select count(*) n from "${t}"`).get() as { n: number }).n;
+    } finally {
+      live.close();
+    }
+
     const target = path.join(scratch, 'data');
     restoreBackup(name, target, backupDir, now);
+    const backup = new Database(path.join(backupDir, name, DB_FILE), { readonly: true, fileMustExist: true });
     const restored = openDatabase(target);
     let tables: TableCheck[];
     try {
-      tables = CHECKED_TABLES.map((t) => {
-        const r = fingerprint(restored.sqlite, t);
-        const l = before.get(t)!;
-        return { table: t, liveRows: l.rows, restoredRows: r.rows, same: l.hash === r.hash };
+      const restoredTables = new Set(contentTables(restored.sqlite));
+      tables = contentTables(backup).map((t) => {
+        const b = fingerprint(backup, t);
+        const r = restoredTables.has(t) ? fingerprint(restored.sqlite, t) : { rows: 0, hash: 'missing' };
+        return { table: t, backupRows: b.rows, restoredRows: r.rows, same: b.hash === r.hash };
       });
     } finally {
+      backup.close();
       restored.close();
     }
-    const liveFiles = fileList(path.join(dataDir, FILES_DIR));
+    const backupFiles = fileList(path.join(backupDir, name, FILES_DIR));
     const restoredFiles = fileList(path.join(target, FILES_DIR));
-    const files = { live: liveFiles.size, restored: restoredFiles.size, same: sameMap(liveFiles, restoredFiles) };
-    return { backup: name, tables, files, ok: tables.every((t) => t.same) && files.same };
+    const files = { backup: backupFiles.size, restored: restoredFiles.size, same: sameMap(backupFiles, restoredFiles) };
+    return { tables, files, liveRows, ok: tables.length > 0 && tables.every((t) => t.same) && files.same };
   } finally {
     fs.rmSync(scratch, { recursive: true, force: true });
   }

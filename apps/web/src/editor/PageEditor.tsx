@@ -30,6 +30,7 @@ import { useStore } from '../data/workspace.tsx';
 import { buildDocument, diffDocument, hasNoContent, liveBlocks, toSnapshot, type DocBlock, type FlatBlock, type Snapshot } from '../model/blocks.ts';
 import { schema } from './schema.tsx';
 import { slashMenuItems } from './slash-menu.tsx';
+import { useFlushOnHide } from '../hooks/flush-on-hide.ts';
 import { navigate } from '../router.ts';
 import { TicketDialog } from '../workspace/Tickets.tsx';
 
@@ -114,22 +115,10 @@ function EditorInner({ pageId, rows, readOnly }: { pageId: string; rows: Stored<
       });
   };
 
-  // Save what is still waiting when the page closes, when the app goes to the background (a phone
-  // may kill it there without warning), or when the tab is closed or reloaded.
-  useEffect(() => {
-    const flush = () => {
-      if (timer.current) save();
-    };
-    const onHidden = () => document.visibilityState === 'hidden' && flush();
-    document.addEventListener('visibilitychange', onHidden);
-    window.addEventListener('pagehide', flush);
-    return () => {
-      document.removeEventListener('visibilitychange', onHidden);
-      window.removeEventListener('pagehide', flush);
-      flush();
-    };
-    // save reads refs only, so it needs no dependencies.
-  }, []);
+  // Save what is still waiting when the page closes or the app goes to the background.
+  useFlushOnHide(() => {
+    if (timer.current) save();
+  });
 
   // Remote changes: rows carrying a timestamp this editor has not seen.
   useEffect(() => {
