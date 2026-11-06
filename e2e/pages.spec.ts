@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { createPage, gotoStable, login, openNav, openSideLink, opensNewPage, setTitle, syncBadge, syncNow, treeLink, unique, waitForServiceWorker } from './helpers.ts';
+import { createPage, gotoStable, login, openNav, openSideLink, opensNewPage, pageAction, setTitle, syncBadge, syncNow, treeLink, unique, waitForServiceWorker } from './helpers.ts';
 
 test('pages: create, nest, rename, favorite, trash, restore, delete permanently', async ({ page }) => {
   await login(page);
@@ -7,7 +7,7 @@ test('pages: create, nest, rename, favorite, trash, restore, delete permanently'
   const child = unique('Catatan');
   await createPage(page, parent);
 
-  await opensNewPage(page, () => page.getByRole('button', { name: '+ Sub-halaman' }).click());
+  await opensNewPage(page, () => pageAction(page, '+ Sub-halaman'));
   await setTitle(page, child);
   await expect(page.getByRole('navigation', { name: 'Lokasi halaman' })).toContainText(parent);
 
@@ -21,7 +21,7 @@ test('pages: create, nest, rename, favorite, trash, restore, delete permanently'
 
   // Trash the parent: the child goes with it.
   await treeLink(page, parent).click();
-  await page.getByRole('button', { name: 'Hapus', exact: true }).click();
+  await pageAction(page, 'Hapus');
   await expect(treeLink(page, parent)).toHaveCount(0);
   await expect(page.getByRole('list', { name: 'Favorit' }).getByText(renamed)).toHaveCount(0);
 
@@ -34,7 +34,7 @@ test('pages: create, nest, rename, favorite, trash, restore, delete permanently'
 
   // Permanent delete only from the trash.
   await treeLink(page, parent).click();
-  await page.getByRole('button', { name: 'Hapus', exact: true }).click();
+  await pageAction(page, 'Hapus');
   await expect(treeLink(page, parent)).toHaveCount(0);
   await openSideLink(page, 'Trash');
   page.once('dialog', (d) => void d.accept());
@@ -158,7 +158,7 @@ test('move dialog: move a page under another without dragging', async ({ page })
   const b = unique('Dipindah');
   await createPage(page, a);
   await createPage(page, b);
-  await page.getByRole('button', { name: 'Pindahkan' }).click();
+  await pageAction(page, 'Pindahkan');
   await page.getByRole('dialog').getByRole('button', { name: a }).click();
   await expect(page.getByRole('navigation', { name: 'Lokasi halaman' })).toContainText(a);
 });

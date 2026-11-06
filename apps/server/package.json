@@ -8,6 +8,7 @@
     "configure": "tsx scripts/configure.ts",
     "backup": "tsx scripts/backup.ts",
     "restore": "tsx scripts/restore.ts",
+    "restore-check": "tsx scripts/restore-check.ts",
     "db:generate": "drizzle-kit generate",
     "typecheck": "tsc -p .",
     "test": "vitest run"

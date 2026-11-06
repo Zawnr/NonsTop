@@ -195,6 +195,15 @@ Keputusan user (2026-11-06): database ticket dibuat lewat template Proyek (Ticke
 - Catatan cepat (F-50): manifest PWA mendapat `shortcuts` "Catatan baru" ke `/quick`. Rute itu membuat halaman di bawah halaman Inbox lalu membuka editor dengan kursor di judul. Inbox memakai id tetap `inbox`, jadi dua perangkat offline tidak membuat dua Inbox. Dibuat saat pertama dipakai.
 - Pengingat (F-52): `DateValue` mendapat `remindAt` opsional (`HH:MM` atau null), diatur di editor sel tanggal. Notifikasi dikirim pada tanggal mulai di jam itu, memakai zona waktu laptop server. Scheduler server mengecek tiap menit: baca `field_state` properti tanggal yang punya `remindAt`, lewati baris terhapus, di trash, atau template. Tabel baru `reminders_sent` (entityId, field, fireAt) mencegah kirim dobel. Ubah jam = kunci baru, jadi terkirim lagi. Pengingat yang terlewat karena laptop mati tetap dikirim kalau telatnya paling lama 6 jam. Isi notifikasi: judul baris dan nama properti. Ketuk notifikasi membuka baris itu.
 
+### Catatan implementasi (sprint 6)
+Keputusan user (2026-11-06): backlog yang ikut hanya seret blok di HP. Bootstrap `field_state`, isolasi data e2e, dan SSE tetap di backlog.
+
+- Layout mobile-first (N-02): di layar sempit, tombol aksi halaman diringkas jadi Favorit plus menu "⋯ Lainnya", supaya area menulis dan board langsung terlihat. Bar atas HP mendapat tombol "+ Catatan" (sama dengan shortcut `/quick`). Enter di judul memindahkan kursor ke editor. Kolom board di HP memakai scroll-snap. Layout laptop tidak berubah.
+- Kecepatan (N-01): e2e mengukur buka halaman berisi 100 blok dari cache lokal (target di bawah 300 ms setelah editor termuat) dan jeda ketik per karakter. Ukuran bundle dicatat di log. Kalau target tidak tercapai, perbaikan masuk sprint ini.
+- Blok di HP: menu blok muncul untuk blok tempat kursor berada (layar sentuh tidak punya hover), dengan item Naikkan, Turunkan, Masuk (indent), dan Keluar (outdent). Seret dengan jari dicoba di HP nyata. Kalau tidak jalan, empat item menu itu menjadi cara memindah blok di HP.
+- E2e offline: HP offline mengedit judul, isi blok, nilai sel database, membuat catatan cepat dan ticket, lalu online. Laptop harus melihat semuanya, tanpa konflik palsu.
+- Uji restore: script `pnpm restore-check <backup>` memulihkan backup ke folder sementara, lalu membandingkan isi `field_state` dengan database aktif. Dijalankan pada data nyata saat Verify lapis 3.
+
 ### Alur utama
 - **Catatan cepat (F-50):** shortcut PWA "Catatan baru" di launcher Android membuka halaman baru di Inbox dengan kursor siap mengetik.
 - **Pengingat (F-52):** properti date bisa diberi jam pengingat. Scheduler server mengecek tiap menit, mengirim web-push ke semua perangkat terdaftar, dan mencatat yang sudah terkirim agar tidak dobel.

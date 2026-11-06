@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { addProperty, addRow, cell, createDatabase, pickOption, table } from './database-helpers.ts';
-import { createPage, gotoStable, login, openNav, setTitle, unique } from './helpers.ts';
+import { createPage, gotoStable, login, openNav, pageAction, pageActionNames, setTitle, unique } from './helpers.ts';
 
 const isPhone = () => test.info().project.name === 'android';
 
@@ -31,7 +31,7 @@ test('project template: Ticket and Epic, an idea page becomes a backlog ticket w
 
   const idea = unique('Ide');
   await createPage(page, idea);
-  await page.getByRole('button', { name: 'Jadikan ticket' }).click();
+  await pageAction(page, 'Jadikan ticket');
   await pickTicketDatabase(page, project);
 
   // The idea stays and links to its ticket; the ticket links back.
@@ -42,7 +42,7 @@ test('project template: Ticket and Epic, an idea page becomes a backlog ticket w
   await expect(page.getByLabel('Judul halaman')).toHaveValue(idea);
   await expect(page.getByLabel('Link ticket')).toContainText('Dari:');
   await expect(cell(page, 'Status', idea)).toHaveText('Backlog');
-  await expect(page.getByRole('button', { name: 'Jadikan ticket' })).toHaveCount(0);
+  expect(await pageActionNames(page)).not.toContain('Jadikan ticket');
 
   // Backlog view lists open tickets only; the board groups them by status.
   await page.getByRole('navigation', { name: 'Lokasi halaman' }).getByRole('link', { name: 'Ticket' }).click();
@@ -131,16 +131,27 @@ test('reminder: a date gets a reminder time, shown on the cell', async ({ page }
   const row = unique('Laporan');
   await addRow(page, row);
 
+  // Next year, so the date stays in the future whenever the test runs.
+  const year = new Date().getFullYear() + 1;
   await cell(page, 'Deadline', row).click();
   const pop = page.getByRole('dialog', { name: `Deadline: ${row}` });
-  await pop.getByLabel('Tanggal mulai').fill('2026-12-01');
+  await pop.getByLabel('Tanggal mulai').fill(`${year}-12-01`);
   await pop.getByRole('button', { name: '+ Pengingat' }).click();
   await pop.getByLabel('Jam pengingat').fill('07:45');
+  // The editor says when the notification comes (or why it will not).
+  await expect(pop.getByRole('status')).toContainText(/Notifikasi muncul dalam \d+ hari/);
   await pop.getByRole('button', { name: 'Simpan' }).click();
-  await expect(cell(page, 'Deadline', row)).toHaveText('1 Des 2026 🔔 07:45');
+  await expect(cell(page, 'Deadline', row)).toHaveText(new RegExp(`^1 Des ${year} 🔔 07:45 · \\d+ hari( \\d+ jam)? lagi$`));
 
   await cell(page, 'Deadline', row).click();
   await page.getByRole('dialog', { name: `Deadline: ${row}` }).getByRole('button', { name: 'Hapus pengingat' }).click();
   await page.getByRole('dialog', { name: `Deadline: ${row}` }).getByRole('button', { name: 'Simpan' }).click();
-  await expect(cell(page, 'Deadline', row)).toHaveText('1 Des 2026');
+  await expect(cell(page, 'Deadline', row)).toHaveText(`1 Des ${year}`);
+
+  // A time long past today is not sent, and the editor says so.
+  await cell(page, 'Deadline', row).click();
+  const again = page.getByRole('dialog', { name: `Deadline: ${row}` });
+  await again.getByLabel('Tanggal mulai').fill('2020-01-01');
+  await again.getByRole('button', { name: '+ Pengingat' }).click();
+  await expect(again.getByRole('status')).toContainText('tidak dikirim');
 });

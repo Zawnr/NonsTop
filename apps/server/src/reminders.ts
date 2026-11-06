@@ -2,13 +2,13 @@
 // on its start date at that local time (the laptop's time zone). Checked every minute; each
 // reminder is recorded in `reminders_sent` before it goes out, so it is sent at most once.
 import { and, eq, inArray, like } from 'drizzle-orm';
-import { dateValue, PROP_PREFIX } from '@nonstop/shared';
+import { dateValue, PROP_PREFIX, REMINDER_CHECK_MS, REMINDER_LATE_LIMIT_MS, reminderTime } from '@nonstop/shared';
 import type { Db } from './db/client.ts';
 import { fieldState, remindersSent } from './db/schema.ts';
 import type { PushPayload } from './push.ts';
 
 /** A reminder missed while the laptop was off still goes out when it is at most this late. */
-export const LATE_LIMIT_MS = 6 * 60 * 60 * 1000;
+export const LATE_LIMIT_MS = REMINDER_LATE_LIMIT_MS;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 
 export interface DueReminder {
@@ -22,12 +22,7 @@ export interface DueReminder {
 type Sender = (payload: PushPayload) => Promise<unknown>;
 
 /** Local time of a reminder, or null when the date does not exist (for example 31 Feb). */
-export function fireTime(start: string, remindAt: string): Date | null {
-  const [y, m, d] = start.split('-').map(Number);
-  const [hh, mm] = remindAt.split(':').map(Number);
-  const t = new Date(y!, m! - 1, d!, hh!, mm!);
-  return t.getFullYear() === y && t.getMonth() === m! - 1 && t.getDate() === d ? t : null;
-}
+export const fireTime = reminderTime;
 
 export class ReminderService {
   constructor(
@@ -145,10 +140,21 @@ export class ReminderService {
   }
 }
 
-/** Runs the reminder check every minute. Returns a function that stops it. */
-export function scheduleReminders(service: ReminderService, intervalMs = 60_000): () => void {
+/**
+ * Runs the reminder check now, then on every minute (a second after it turns), so a reminder for
+ * 09:00 goes out at about 09:00:01 instead of up to a minute late. Returns a function that stops it.
+ */
+export function scheduleReminders(service: ReminderService, intervalMs = REMINDER_CHECK_MS, now: () => number = Date.now): () => void {
   const run = () => void service.tick().catch((err) => console.error(`[reminders] ${(err as Error).message}`));
   run();
-  const timer = setInterval(run, intervalMs);
-  return () => clearInterval(timer);
+  let interval: ReturnType<typeof setInterval> | undefined;
+  const untilNext = intervalMs - (now() % intervalMs) + 1000;
+  const first = setTimeout(() => {
+    run();
+    interval = setInterval(run, intervalMs);
+  }, untilNext);
+  return () => {
+    clearTimeout(first);
+    if (interval) clearInterval(interval);
+  };
 }

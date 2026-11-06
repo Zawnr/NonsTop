@@ -1,6 +1,6 @@
 // Page templates (F-30): the choices on an empty page, the sidebar section, and the dialog that
 // creates a page from a template.
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import type { Page } from '@nonstop/shared';
 import { applyTemplate, createFromTemplate, type TemplateRef } from '../data/copy.ts';
@@ -52,10 +52,15 @@ export function useIsEmptyPage(page: Page): boolean {
 export function EmptyPageTemplates({ page }: { page: Page }) {
   const store = useStore();
   const { pages } = useData();
+  // Open on wide screens, folded on phones; decided once, then it follows the user's toggles.
+  const [open, setOpen] = useState(() => !window.matchMedia('(max-width: 767px)').matches);
   return (
     <section className="empty-templates" aria-label="Mulai dari template">
-      <p className="muted">Mulai dari template, atau langsung ketik di bawah.</p>
-      <TemplateList index={pages} exclude={page.id} onPick={(ref) => void applyTemplate(store, pages, page.id, ref)} />
+      {/* Folded on phones, so a quick note starts typing near the top (N-02). */}
+      <details open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
+        <summary className="muted">Mulai dari template, atau langsung ketik di bawah.</summary>
+        <TemplateList index={pages} exclude={page.id} onPick={(ref) => void applyTemplate(store, pages, page.id, ref)} />
+      </details>
     </section>
   );
 }

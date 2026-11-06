@@ -1,8 +1,9 @@
 // One property value of one row: shown and edited in place (F-11, F-20). Used by the table and by
 // the property panel of a row page (F-14).
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { optionColors, propField, type Property, type SelectOption } from '@nonstop/shared';
+import { formatCountdown, optionColors, propField, reminderStatus, type Property, type SelectOption } from '@nonstop/shared';
 import { addRow, newId, setOptions, setRelation, setValue } from '../../data/databases.ts';
+import { useNow } from '../../hooks/now.ts';
 import { useData, useStore } from '../../data/workspace.tsx';
 import {
   cellText,
@@ -174,9 +175,37 @@ function display(cell: CellValue): ReactNode {
           {r.title || UNTITLED}
         </span>
       ));
+    case 'date':
+      return cell.value?.remindAt ? (
+        <>
+          {cellText(cell)}
+          <ReminderCountdown start={cell.value.start} remindAt={cell.value.remindAt} />
+        </>
+      ) : (
+        cellText(cell)
+      );
     default:
       return cellText(cell);
   }
+}
+
+/** "· 5 menit lagi" next to a date with a reminder that has not gone out yet (F-52). */
+function ReminderCountdown({ start, remindAt }: { start: string; remindAt: string }) {
+  const now = useNow();
+  const status = reminderStatus(start, remindAt, now);
+  if (status.kind !== 'upcoming') return null;
+  return <span className="muted reminder-countdown"> · {formatCountdown(status.ms)} lagi</span>;
+}
+
+/** What happens to the reminder being edited, so the user knows when the notification comes. */
+function ReminderHint({ start, remindAt }: { start: string; remindAt: string }) {
+  // Every second while the editor is open: a reminder a minute away is worth watching closely.
+  const now = useNow(1000);
+  const status = reminderStatus(start, remindAt, now);
+  if (status.kind === 'upcoming') return <span className="muted" role="status">Notifikasi muncul dalam {formatCountdown(status.ms)}, ke semua perangkat.</span>;
+  if (status.kind === 'due') return <span className="muted" role="status">Jam ini sudah lewat: notifikasi dikirim dalam 1 menit setelah disimpan.</span>;
+  if (status.kind === 'missed') return <span className="error" role="status">Lewat lebih dari 6 jam: notifikasi tidak dikirim. Pilih jam yang akan datang.</span>;
+  return null;
 }
 
 /** A value as plain display, for places that are links themselves (list view). */
@@ -248,7 +277,7 @@ function DateEditor({ prop, row, cell, onDone }: { prop: Property; row: Row; cel
               ✕
             </button>
           </span>
-          <span className="muted">Notifikasi ke semua perangkat pada tanggal mulai, jam ini.</span>
+          <ReminderHint start={start} remindAt={remindAt.slice(0, 5)} />
         </label>
       )}
       <div className="row">

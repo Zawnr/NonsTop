@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { addProperty, addRow, cell, createDatabase, fillCell, pickOption, table } from './database-helpers.ts';
-import { createPage, login, openNav, opensNewPage, unique } from './helpers.ts';
+import { createPage, login, openNav, opensNewPage, pageAction, pageActionNames, unique } from './helpers.ts';
 
 const isPhone = () => test.info().project.name === 'android';
 
@@ -156,6 +156,8 @@ test('page templates: built-in on an empty page, own templates from the sidebar'
   const title = unique('Liburan');
   await createPage(page, title);
   const choices = page.getByRole('region', { name: 'Mulai dari template' });
+  // Folded on phones (N-02).
+  if (!(await choices.getByRole('button', { name: /Rencana trip/ }).isVisible())) await choices.locator('summary').click();
   await choices.getByRole('button', { name: /Rencana trip/ }).click();
   const editor = page.getByTestId('editor');
   await expect(editor.getByRole('heading', { name: 'Rute' })).toBeVisible();
@@ -164,7 +166,7 @@ test('page templates: built-in on an empty page, own templates from the sidebar'
   await expect(page.getByLabel('Judul halaman')).toHaveValue(title);
 
   // Turn it into a template: it leaves the tree for the Template section.
-  await page.getByRole('button', { name: 'Jadikan template' }).click();
+  await pageAction(page, 'Jadikan template');
   await openNav(page);
   const side = page.getByRole('complementary');
   await expect(side.getByRole('list', { name: 'Template' }).getByRole('link', { name: new RegExp(title) })).toBeVisible();
@@ -177,7 +179,7 @@ test('page templates: built-in on an empty page, own templates from the sidebar'
   await expect(page).not.toHaveURL(before);
   await expect(page.getByLabel('Judul halaman')).toHaveValue(title);
   await expect(page.getByTestId('editor').getByRole('heading', { name: 'Rute' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Jadikan template' })).toBeVisible();
+  expect(await pageActionNames(page)).toContain('Jadikan template');
 });
 
 test('duplicate: a database page with or without rows, and an inline database', async ({ page }) => {
@@ -189,14 +191,14 @@ test('duplicate: a database page with or without rows, and an inline database', 
   await addRow(page, row);
   await pickOption(page, 'Status', row, 'Selesai');
 
-  await page.getByRole('button', { name: 'Duplikat', exact: true }).click();
+  await pageAction(page, 'Duplikat');
   let before = page.url();
   await page.getByRole('dialog', { name: 'Duplikat' }).getByRole('button', { name: 'Duplikat dengan isi' }).click();
   await expect(page).not.toHaveURL(before);
   await expect(page.getByLabel('Judul halaman')).toHaveValue(`${name} (salinan)`);
   await expect(cell(page, 'Status', row)).toHaveText('Selesai');
 
-  await page.getByRole('button', { name: 'Duplikat', exact: true }).click();
+  await pageAction(page, 'Duplikat');
   before = page.url();
   await page.getByRole('dialog', { name: 'Duplikat' }).getByRole('button', { name: 'Duplikat struktur saja' }).click();
   await expect(page).not.toHaveURL(before);

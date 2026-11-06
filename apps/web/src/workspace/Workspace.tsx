@@ -100,7 +100,13 @@ export function Workspace({ onLogout }: { onLogout: () => void }) {
           <button className="icon" onClick={() => setNavOpen(true)} aria-label="Buka menu">
             ☰
           </button>
-          <SyncBadge />
+          <span className="row mobile-bar-end">
+            {/* Quick note from anywhere in the app, like the launcher shortcut (F-50, N-02). */}
+            <button className="ghost quick-note" onClick={() => navigate('/quick')}>
+              + Catatan
+            </button>
+            <SyncBadge />
+          </span>
         </header>
         <View index={index} onLogout={onLogout} onNewPage={() => void newPage()} />
       </main>
