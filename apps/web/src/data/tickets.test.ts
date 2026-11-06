@@ -109,10 +109,10 @@ describe('convert to ticket (F-41)', () => {
     await createProject(store, (await snapshot(store)).pages, null);
     const idea = await createPage(store, (await snapshot(store)).pages, null);
     await store.write('page', idea, { title: 'Mode gelap' });
-    let { pages, databases } = await snapshot(store);
-    const target = ticketDatabases(databases, pages)[0]!;
-    const ticket = await convertToTicket(store, pages, databases, target.id, { pageId: idea });
-    ({ pages } = await snapshot(store));
+    const before = await snapshot(store);
+    const target = ticketDatabases(before.databases, before.pages)[0]!;
+    const ticket = await convertToTicket(store, before.pages, before.databases, target.id, { pageId: idea });
+    const { pages } = await snapshot(store);
     expect(pages.byId.get(ticket)).toMatchObject({ title: 'Mode gelap', sourceId: idea, sourceBlockId: null, databaseId: target.id });
     expect(pages.byId.get(idea)!.title).toBe('Mode gelap');
   });
