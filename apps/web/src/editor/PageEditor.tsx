@@ -3,7 +3,7 @@
 // The editor owns what the user sees. A snapshot holds the last state written to or accepted from
 // the store, so local edits are found by diffing the editor against it, and remote changes by
 // finding rows with a timestamp this editor has not seen yet.
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { filterSuggestionItems } from '@blocknote/core';
 import { en } from '@blocknote/core/locales';
@@ -18,6 +18,7 @@ import {
   useComponentsContext,
   useCreateBlockNote,
   useExtensionState,
+  type SideMenuProps,
 } from '@blocknote/react';
 import { SideMenuExtension } from '@blocknote/core/extensions';
 import { BlockNoteView } from '@blocknote/ariakit';
@@ -228,33 +229,42 @@ function EditorInner({ pageId, rows, readOnly }: { pageId: string; rows: Stored<
         }}
         onBlur={() => timer.current && save()}
       >
-        <SuggestionMenuController triggerCharacter="/" getItems={async (query) => filterSuggestionItems(slashMenuItems(editor, createDatabase), query)} />
-        <SideMenuController
-          sideMenu={(props) => (
-            <SideMenu
-              {...props}
-              dragHandleMenu={() => (
-                <DragHandleMenu>
-                  <RemoveBlockItem>Hapus</RemoveBlockItem>
-                  <BlockColorsItem>Warna</BlockColorsItem>
-                  {!readOnly && <TicketItem onPick={startTicket} />}
-                </DragHandleMenu>
-              )}
-            />
-          )}
-        />
+        <SuggestionMenuController triggerCharacter="/" getItems={async (query) => filterSuggestionItems(slashMenuItems(editor, createDatabase, readOnly ? undefined : startTicket), query)} />
+        <TicketContext.Provider value={readOnly ? null : startTicket}>
+          <SideMenuController sideMenu={NonstopSideMenu} />
+        </TicketContext.Provider>
       </BlockNoteView>
       {ticketFor && <TicketDialog source={{ pageId, blockId: ticketFor }} onClose={() => setTicketFor(null)} />}
     </div>
   );
 }
 
+/** Opens the ticket dialog for a block. null = read-only page. */
+const TicketContext = createContext<((blockId: string) => void) | null>(null);
+
+// Defined once at module level: a component created during render would remount on every editor
+// update and close the menu right after it opens.
+function NonstopDragMenu() {
+  return (
+    <DragHandleMenu>
+      <RemoveBlockItem>Hapus</RemoveBlockItem>
+      <BlockColorsItem>Warna</BlockColorsItem>
+      <TicketItem />
+    </DragHandleMenu>
+  );
+}
+
+function NonstopSideMenu(props: SideMenuProps) {
+  return <SideMenu {...props} dragHandleMenu={NonstopDragMenu} />;
+}
+
 /** "Jadikan ticket" in the block menu, for checklist items only (F-41). */
-function TicketItem({ onPick }: { onPick: (blockId: string) => void }) {
+function TicketItem() {
   const Components = useComponentsContext()!;
   const editor = useBlockNoteEditor();
+  const onPick = useContext(TicketContext);
   const block = useExtensionState(SideMenuExtension, { editor, selector: (state) => state?.block });
-  if (!block || block.type !== 'checkListItem') return null;
+  if (!onPick || !block || block.type !== 'checkListItem') return null;
   return (
     <Components.Generic.Menu.Item className="bn-menu-item" onClick={() => onPick(block.id)}>
       Jadikan ticket
